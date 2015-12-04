@@ -1,0 +1,83 @@
+From dd4a7d30ab2d39515630aca61dbaa4cf2ce54dd8 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Tue, 21 Jan 2014 21:13:12 +0100
+Subject: [PATCH 2/4] ARM: m53evk: add needed commands and options
+
+- "env ask", "env grep" and "setexpr" are needed for commissioning
+- add support for ext4 file systems
+- adjust default environment to use ext4 commands
+- add write support for (V)FAT and EXT4
+- add bitmap and splashscreen support
+- print timestamp information for images
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Signed-off-by: Wolfgang Denk <wd@denx.de>
+Cc: Stefano Babic <sbabic@denx.de>
+---
+ include/configs/m53evk.h | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/include/configs/m53evk.h b/include/configs/m53evk.h
+index 169baf0..caa1fd2 100644
+--- a/include/configs/m53evk.h
++++ b/include/configs/m53evk.h
+@@ -18,17 +18,26 @@
+ #define CONFIG_REVISION_TAG
+ #define CONFIG_SYS_NO_FLASH
+ 
++#define CONFIG_FIT
++
++#define	CONFIG_TIMESTAMP		/* Print image info with timestamp */
++
+ /*
+  * U-Boot Commands
+  */
+ #include <config_cmd_default.h>
+ #define CONFIG_DISPLAY_BOARDINFO
+ #define CONFIG_DOS_PARTITION
++#define CONFIG_FAT_WRITE
+ 
++#define CONFIG_CMD_ASKENV
++#define CONFIG_CMD_BMP
+ #define CONFIG_CMD_DATE
+ #define CONFIG_CMD_DHCP
+-#define CONFIG_CMD_EXT2
++#define CONFIG_CMD_EXT4
++#define CONFIG_CMD_EXT4_WRITE
+ #define CONFIG_CMD_FAT
++#define CONFIG_CMD_GREPENV
+ #define CONFIG_CMD_I2C
+ #define CONFIG_CMD_MII
+ #define CONFIG_CMD_MMC
+@@ -36,9 +45,12 @@
+ #define CONFIG_CMD_NET
+ #define CONFIG_CMD_PING
+ #define CONFIG_CMD_SATA
++#define CONFIG_CMD_SETEXPR
+ #define CONFIG_CMD_USB
+ #define CONFIG_VIDEO
+ 
++#define CONFIG_REGEX			/* Enable regular expression support */
++
+ /*
+  * Memory configurations
+  */
+@@ -210,10 +222,14 @@
+ #define CONFIG_VGA_AS_SINGLE_DEVICE
+ #define CONFIG_SYS_CONSOLE_IS_IN_ENV
+ #define CONFIG_VIDEO_BMP_RLE8
++#define CONFIG_VIDEO_BMP_GZIP
+ #define CONFIG_SPLASH_SCREEN
++#define CONFIG_SPLASHIMAGE_GUARD
++#define CONFIG_SPLASH_SCREEN_ALIGN
+ #define CONFIG_BMP_16BPP
+ #define CONFIG_VIDEO_LOGO
+-#define CONFIG_IPUV3_CLK	200000000
++#define CONFIG_SYS_VIDEO_LOGO_MAX_SIZE	(2 << 20)
++#define CONFIG_IPUV3_CLK		200000000
+ #endif
+ 
+ /*
+-- 
+1.8.5.2
+

@@ -1,0 +1,37 @@
+From ef148f30ccd320abbd751ddfb6605ad2318f75f9 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Sat, 29 Dec 2012 23:35:58 +0100
+Subject: [PATCH 02/20] ARM: mx5: Add AUDMUX4 pinctrl data
+
+This patch adds pinctrl data for the AUDMUX4 on MX53.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Fabio Estevam <fabio.estevam@freescale.com>
+Cc: Shawn Guo <shawn.guo@linaro.org>
+---
+ arch/arm/boot/dts/imx53.dtsi | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/arm/boot/dts/imx53.dtsi b/arch/arm/boot/dts/imx53.dtsi
+index eb83aa0..85973a1 100644
+--- a/arch/arm/boot/dts/imx53.dtsi
++++ b/arch/arm/boot/dts/imx53.dtsi
+@@ -267,6 +267,15 @@
+ 							MX53_PAD_KEY_ROW1__AUDMUX_AUD5_RXD  0x80000000
+ 						>;
+ 					};
++
++					pinctrl_audmux_2: audmuxgrp-2 {
++						fsl,pins = <
++							MX53_PAD_SD2_DATA3__AUDMUX_AUD4_TXC 0x80000000
++							MX53_PAD_SD2_DATA2__AUDMUX_AUD4_TXD 0x80000000
++							MX53_PAD_SD2_DATA1__AUDMUX_AUD4_TXFS 0x80000000
++							MX53_PAD_SD2_DATA0__AUDMUX_AUD4_RXD 0x80000000
++						>;
++					};
+ 				};
+ 
+ 				fec {
+-- 
+1.8.4.3
+

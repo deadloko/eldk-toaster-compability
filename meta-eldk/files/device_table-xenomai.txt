@@ -1,0 +1,44 @@
+#<path>	<type> <mode>	<uid>	<gid>	<major>	<minor>	<start>	<inc>	<count>
+#/dev/mem    c      640      0       0       1       1       0        0        -
+#
+#type can be one of: 
+#    f	A regular file
+#    d	Directory
+#    c	Character special device file
+#    b	Block special device file
+#    p	Fifo (named pipe)
+
+/dev		d	755	root	root	-	-	-	-	-
+/dev/rtp0	c	666	root	root	150	0	-	-	-
+/dev/rtp1	c	666	root	root	150	0	-	-	-
+/dev/rtp2	c	666	root	root	150	0	-	-	-
+/dev/rtp3	c	666	root	root	150	0	-	-	-
+/dev/rtp4	c	666	root	root	150	0	-	-	-
+/dev/rtp5	c	666	root	root	150	0	-	-	-
+/dev/rtp6	c	666	root	root	150	0	-	-	-
+/dev/rtp7	c	666	root	root	150	0	-	-	-
+/dev/rtp8	c	666	root	root	150	0	-	-	-
+/dev/rtp9	c	666	root	root	150	0	-	-	-
+/dev/rtp10	c	666	root	root	150	0	-	-	-
+/dev/rtp11	c	666	root	root	150	0	-	-	-
+/dev/rtp12	c	666	root	root	150	0	-	-	-
+/dev/rtp13	c	666	root	root	150	0	-	-	-
+/dev/rtp14	c	666	root	root	150	0	-	-	-
+/dev/rtp15	c	666	root	root	150	0	-	-	-
+/dev/rtp16	c	666	root	root	150	0	-	-	-
+/dev/rtp17	c	666	root	root	150	0	-	-	-
+/dev/rtp18	c	666	root	root	150	0	-	-	-
+/dev/rtp19	c	666	root	root	150	0	-	-	-
+/dev/rtp20	c	666	root	root	150	0	-	-	-
+/dev/rtp21	c	666	root	root	150	0	-	-	-
+/dev/rtp22	c	666	root	root	150	0	-	-	-
+/dev/rtp23	c	666	root	root	150	0	-	-	-
+/dev/rtp24	c	666	root	root	150	0	-	-	-
+/dev/rtp25	c	666	root	root	150	0	-	-	-
+/dev/rtp26	c	666	root	root	150	0	-	-	-
+/dev/rtp27	c	666	root	root	150	0	-	-	-
+/dev/rtp28	c	666	root	root	150	0	-	-	-
+/dev/rtp29	c	666	root	root	150	0	-	-	-
+/dev/rtp30	c	666	root	root	150	0	-	-	-
+/dev/rtp31	c	666	root	root	150	0	-	-	-
+/dev/rtheap	c	666	root	root	10	254	-	-	-

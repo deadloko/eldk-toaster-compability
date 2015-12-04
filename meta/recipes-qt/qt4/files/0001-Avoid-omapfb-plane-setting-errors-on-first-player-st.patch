@@ -1,0 +1,51 @@
+From 95e97e6403e9ece55fe2aea1980992d7352a8f0f Mon Sep 17 00:00:00 2001
+From: Anatolij Gustschin <agust@denx.de>
+Date: Mon, 5 Dec 2011 14:01:08 +0100
+Subject: [PATCH] Avoid omapfb plane setting errors on first player start
+
+Additional overlay init changes to fix error messages
+observed on first player start after boot.
+
+Signed-off-by: Anatolij Gustschin <agust@denx.de>
+---
+ src/multimedia/qgraphicsvideoitem.cpp |   17 +++++++++++++++++
+ 1 files changed, 17 insertions(+), 0 deletions(-)
+
+diff --git a/src/multimedia/qgraphicsvideoitem.cpp b/src/multimedia/qgraphicsvideoitem.cpp
+index 0201160..b6b3eb7 100644
+--- a/src/multimedia/qgraphicsvideoitem.cpp
++++ b/src/multimedia/qgraphicsvideoitem.cpp
+@@ -81,6 +81,7 @@ QT_BEGIN_NAMESPACE
+ 
+ struct fb_var_screeninfo screen_info;
+ struct omapfb_plane_info plane_info;
++struct omapfb_mem_info mem_info;
+ int overlay_fd;
+ 
+ int setup_plane(struct omapfb_plane_info *p, int on)
+@@ -143,6 +144,22 @@ int init_overlay(void)
+         return false;
+     }
+ 
++    if (plane_info.enabled) {
++        plane_info.enabled = 0;
++        if (ioctl(overlay_fd, OMAPFB_SETUP_PLANE, &plane_info)) {
++            perror("could not disable plane");
++            return false;
++        }
++    }
++
++    mem_info.type = OMAPFB_MEMTYPE_SDRAM;
++    mem_info.size = screen_info.xres * screen_info.yres / 2;
++
++    if (ioctl(overlay_fd, OMAPFB_SETUP_MEM, &mem_info)) {
++        perror("could not setup memory info");
++        return false;
++    }
++
+     return setup_plane(&plane_info, 0);
+ }
+ 
+-- 
+1.7.4.1
+

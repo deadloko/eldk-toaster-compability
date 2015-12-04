@@ -1,0 +1,33 @@
+From af2a7cf4e533c06049fb5abd9de03d118f1730a9 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Tue, 8 Jan 2013 15:00:14 +0100
+Subject: [PATCH 11/20] video: Avoid IPU CRTC kernel crash
+
+The CRTC crashed in case the IPU was initialized prior to kernel
+started due to spurious interrupt being generated and not properly
+handled. Avoid this crash
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ drivers/staging/imx-drm/ipuv3-crtc.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/staging/imx-drm/ipuv3-crtc.c b/drivers/staging/imx-drm/ipuv3-crtc.c
+index ff5c633..3406117 100644
+--- a/drivers/staging/imx-drm/ipuv3-crtc.c
++++ b/drivers/staging/imx-drm/ipuv3-crtc.c
+@@ -331,6 +331,11 @@ static irqreturn_t ipu_irq_handler(int irq, void *dev_id)
+ {
+ 	struct ipu_crtc *ipu_crtc = dev_id;
+ 
++	if (!ipu_crtc->imx_crtc) {
++		pr_err("Spurious IPU IRQ\n");
++		return IRQ_HANDLED;
++	}
++
+ 	imx_drm_handle_vblank(ipu_crtc->imx_crtc);
+ 
+ 	if (ipu_crtc->newfb) {
+-- 
+1.8.4.3
+

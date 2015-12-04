@@ -1,0 +1,63 @@
+From 07469fd3ae3c64dbc9d014c92a3ca74cd97aa297 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Fri, 28 Mar 2014 04:45:16 +0100
+Subject: [PATCH 1/2] arm: mx5: Fix memory slowness on M53EVK
+
+Fix memory access slowness on i.MX53 M53EVK board. Let us inspect the
+issue: First of all, the i.MX53 CPU has two memory banks mapped at
+0x7000_0000 and 0xb000_0000 and each of those can hold up to 1GiB of
+DRAM memory. Notice that the memory area is not continuous. On M53EVK,
+each of the banks contain 512MiB of DRAM, which makes a total of 1GiB
+of memory available to the system.
+
+The problem is how the relocation of U-Boot is treated on i.MX53 . The
+U-Boot is placed at the ((start of first DRAM partition) + (gd->ram_size)) .
+This in turn poses a problem, since in our case, the gd->ram_size is 1GiB,
+the first DRAM bank starts at 0x7000_0000 and contains 512MiB of memory.
+Thus, with this algorithm, U-Boot is placed at offset:
+
+    0x7000_0000 + 1GiB - sizeof(u-boot and some small margin)
+
+This is past the DRAM available in the first bank on M53EVK, but is still
+within the address range of the first DRAM bank. Because of the memory
+wrap-around, the data can still be read and written to this area, but the
+access is much slower.
+
+There were two ideas how to solve this problem, first was to map both of
+the available DRAM chunks next to one another by using MMU, second was to
+define CONFIG_VERY_BIG_RAM and CONFIG_MAX_MEM_MAPPED to size of the memory
+in the first DRAM bank. We choose the later because it turns out the former
+is not applicable afterall. The former cannot be used in case Linux kernel
+was loaded into the second DRAM bank area, which would be remapped and one
+would try booting the kernel, since at some point before the kernel is started,
+the MMU would be turned off, which would destroy the mapping and hang the
+system.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Fabio Estevam <fabio.estevam@freescale.com>
+Cc: Stefano Babic <sbabic@denx.de>
+Cc: Wolfgang Denk <wd@denx.de>
+
+V2: Reword the commit message
+---
+ include/configs/m53evk.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/include/configs/m53evk.h b/include/configs/m53evk.h
+index 9d41e75..d592318 100644
+--- a/include/configs/m53evk.h
++++ b/include/configs/m53evk.h
+@@ -62,7 +62,9 @@
+ #define PHYS_SDRAM_SIZE			(PHYS_SDRAM_1_SIZE + PHYS_SDRAM_2_SIZE)
+ #define CONFIG_SYS_MALLOC_LEN		(10 * 1024 * 1024)
+ #define CONFIG_SYS_MEMTEST_START	0x70000000
+-#define CONFIG_SYS_MEMTEST_END		0xaff00000
++#define CONFIG_SYS_MEMTEST_END		0x8ff00000
++#define CONFIG_VERY_BIG_RAM
++#define CONFIG_MAX_MEM_MAPPED		PHYS_SDRAM_1_SIZE
+ 
+ #define CONFIG_SYS_SDRAM_BASE		(PHYS_SDRAM_1)
+ #define CONFIG_SYS_INIT_RAM_ADDR	(IRAM_BASE_ADDR)
+-- 
+1.9.0
+

@@ -1,0 +1,56 @@
+From bccea60355534487a3a4b8477effe18047d2d8a7 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Sat, 29 Dec 2012 23:35:58 +0100
+Subject: [PATCH 01/20] mtd: mxc_nand: Make use of supplied pinctrl data
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The MXC NAND driver doesn't consider the pinctrl data supplied via DT, which
+will result in NAND pins not being properly configured.
+
+Make the driver use pinctrl, but to prevent breakage on various boards, do not
+fail if the pinctrl data are not available, only print a warning message.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Cc: Lothar Waßmann <LW@KARO-electronics.de>
+Cc: Sascha Hauer <s.hauer@pengutronix.de>
+---
+ drivers/mtd/nand/mxc_nand.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/mtd/nand/mxc_nand.c b/drivers/mtd/nand/mxc_nand.c
+index 07e5784..31226b0 100644
+--- a/drivers/mtd/nand/mxc_nand.c
++++ b/drivers/mtd/nand/mxc_nand.c
+@@ -34,6 +34,7 @@
+ #include <linux/completion.h>
+ #include <linux/of_device.h>
+ #include <linux/of_mtd.h>
++#include <linux/pinctrl/consumer.h>
+ 
+ #include <asm/mach/flash.h>
+ #include <linux/platform_data/mtd-mxc_nand.h>
+@@ -1396,6 +1397,7 @@ static int mxcnd_probe(struct platform_device *pdev)
+ 	struct mtd_info *mtd;
+ 	struct mxc_nand_host *host;
+ 	struct resource *res;
++	struct pinctrl *pinctrl;
+ 	int err = 0;
+ 
+ 	/* Allocate memory for MTD device structure and private data */
+@@ -1464,6 +1466,10 @@ static int mxcnd_probe(struct platform_device *pdev)
+ 	if (IS_ERR(host->base))
+ 		return PTR_ERR(host->base);
+ 
++	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
++	if (IS_ERR(pinctrl))
++		dev_warn(&pdev->dev, "No PINCTRL data for the NAND driver!\n");
++
+ 	host->main_area0 = host->base;
+ 
+ 	if (host->devtype_data->regs_offset)
+-- 
+1.8.4.3
+

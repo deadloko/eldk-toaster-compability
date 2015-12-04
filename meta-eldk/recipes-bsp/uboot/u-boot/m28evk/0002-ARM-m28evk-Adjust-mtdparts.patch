@@ -1,0 +1,50 @@
+From be36f9e16245a7ceefd915161018ca05b15a92fd Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Wed, 13 Nov 2013 01:17:57 +0100
+Subject: [PATCH 2/3] ARM: m28evk: Adjust mtdparts
+
+Adjust the mtdparts to also consider factory-programmed config block.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ include/configs/m28evk.h | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/include/configs/m28evk.h b/include/configs/m28evk.h
+index 4a0e875..e44344b 100644
+--- a/include/configs/m28evk.h
++++ b/include/configs/m28evk.h
+@@ -65,8 +65,8 @@
+ #if defined(CONFIG_CMD_NAND) && defined(CONFIG_ENV_IS_IN_NAND)
+ #define CONFIG_ENV_SIZE_REDUND		CONFIG_ENV_SIZE
+ #define CONFIG_ENV_SECT_SIZE		(128 * 1024)
+-#define CONFIG_ENV_RANGE		(512 * 1024)
+-#define CONFIG_ENV_OFFSET		0x300000
++#define CONFIG_ENV_RANGE		(4 * CONFIG_ENV_SECT_SIZE)
++#define CONFIG_ENV_OFFSET		(24 * CONFIG_ENV_SECT_SIZE) /* 3 MiB */
+ #define CONFIG_ENV_OFFSET_REDUND	\
+ 		(CONFIG_ENV_OFFSET + CONFIG_ENV_RANGE)
+ 
+@@ -80,13 +80,12 @@
+ #define MTDIDS_DEFAULT			"nand0=gpmi-nand"
+ #define MTDPARTS_DEFAULT			\
+ 	"mtdparts=gpmi-nand:"			\
+-		"3m(bootloader)ro,"		\
+-		"512k(environment),"		\
+-		"512k(redundant-environment),"	\
+-		"4m(kernel),"			\
+-		"128k(fdt),"			\
+-		"8m(ramdisk),"			\
+-		"-(filesystem)"
++		"3m(u-boot),"			\
++		"512k(env1),"			\
++		"512k(env2),"			\
++		"14m(boot),"			\
++		"238m(data),"			\
++		"-@4096k(UBI)"
+ #else
+ #define CONFIG_ENV_IS_NOWHERE
+ #endif
+-- 
+1.8.5.2
+

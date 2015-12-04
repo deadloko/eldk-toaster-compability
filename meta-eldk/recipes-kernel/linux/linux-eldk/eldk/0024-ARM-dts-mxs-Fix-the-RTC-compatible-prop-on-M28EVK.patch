@@ -1,0 +1,29 @@
+From eced8b7be06a79d38c0f9cde874376a6ed9f800d Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Fri, 24 Jan 2014 00:16:19 +0100
+Subject: [PATCH] ARM: dts: mxs: Fix the RTC compatible prop on M28EVK
+
+The compatible property should be m41t62, not mt41t62, so fix this.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Shawn Guo <shawn.guo@linaro.org>
+---
+ arch/arm/boot/dts/imx28-m28evk.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/imx28-m28evk.dts b/arch/arm/boot/dts/imx28-m28evk.dts
+index 8536b0d..f0ad7b9 100644
+--- a/arch/arm/boot/dts/imx28-m28evk.dts
++++ b/arch/arm/boot/dts/imx28-m28evk.dts
+@@ -194,7 +194,7 @@
+ 				};
+ 
+ 				rtc: rtc@68 {
+-					compatible = "stm,mt41t62";
++					compatible = "stm,m41t62";
+ 					reg = <0x68>;
+ 				};
+ 			};
+-- 
+1.8.5.2
+

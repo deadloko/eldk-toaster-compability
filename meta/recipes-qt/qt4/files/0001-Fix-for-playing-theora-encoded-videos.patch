@@ -1,0 +1,31 @@
+From 8b63426a5de06b207f0e765d2f62133bacd7e112 Mon Sep 17 00:00:00 2001
+From: Anatolij Gustschin <agust@denx.de>
+Date: Tue, 29 Nov 2011 17:29:29 +0100
+Subject: [PATCH 1/2] Fix for playing theora encoded videos
+
+Playback doesn't start when using theora encoded
+videos. Always inserting colorspace element in the
+pipeline seems to fix the issue.
+
+Signed-off-by: Anatolij Gustschin <agust@denx.de>
+---
+ .../mediaplayer/qgstreamerplayersession.cpp        |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayersession.cpp b/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayersession.cpp
+index 1011d07..4b1ded8 100644
+--- a/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayersession.cpp
++++ b/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayersession.cpp
+@@ -496,7 +496,8 @@ void QGstreamerPlayerSession::setVideoRenderer(QObject *videoOutput)
+         gst_bin_add(GST_BIN(m_videoOutputBin), m_videoSink);
+ 
+         m_usingColorspaceElement = false;
+-        bool linked = gst_element_link(m_videoIdentity, m_videoSink);
++	//bool linked = gst_element_link(m_videoIdentity, m_videoSink);
++        bool linked = false;
+         if (!linked) {
+             m_usingColorspaceElement = true;
+ #ifdef DEBUG_PLAYBIN
+-- 
+1.7.4.1
+

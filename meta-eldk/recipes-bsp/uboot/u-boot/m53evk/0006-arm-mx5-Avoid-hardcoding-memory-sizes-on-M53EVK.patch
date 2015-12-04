@@ -1,0 +1,111 @@
+From 62bb0c9ef2772474d741f88c85f29e666f955e63 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Fri, 28 Mar 2014 05:09:23 +0100
+Subject: [PATCH 2/2] arm: mx5: Avoid hardcoding memory sizes on M53EVK
+
+The DRAM size can be easily detected at runtime on i.MX53. Implement
+such detection on M53EVK and adjust the rest of the macros accordingly
+to use the detected values.
+
+An important thing to note here is that we had to override the function
+for trimming the effective DRAM address, get_effective_memsize(). That
+is because the function uses CONFIG_MAX_MEM_MAPPED as the upper bound of
+the available DRAM and we don't have gd->bd->bi_dram[0].size set up at
+the time the function is called, thus we cannot put this into the macro
+CONFIG_MAX_MEM_MAPPED . Instead, we use custom override where we use the
+size of the first DRAM block which we just detected.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Fabio Estevam <fabio.estevam@freescale.com>
+Cc: Stefano Babic <sbabic@denx.de>
+Cc: Wolfgang Denk <wd@denx.de>
+
+V2: Use linux/sizes.h instead of asm/sizes.h
+V3: - Drop use of sizes.h completely
+    - Add beefy comment as to why we override get_effective_memsize()
+    - Drop CONFIG_VERY_BIG_RAM and CONFIG_MAX_MEM_MAPPED as we no longer
+      need it if we override get_effective_memsize()
+---
+ board/denx/m53evk/m53evk.c | 31 ++++++++++++++++++++++++-------
+ include/configs/m53evk.h   |  8 +++-----
+ 2 files changed, 27 insertions(+), 12 deletions(-)
+
+diff --git a/board/denx/m53evk/m53evk.c b/board/denx/m53evk/m53evk.c
+index 0f71a16..74f9501 100644
+--- a/board/denx/m53evk/m53evk.c
++++ b/board/denx/m53evk/m53evk.c
+@@ -31,24 +31,41 @@
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ 
+-int dram_init(void)
++static uint32_t mx53_dram_size[2];
++
++phys_size_t get_effective_memsize(void)
+ {
+-	u32 size1, size2;
++	/*
++	 * WARNING: We must override get_effective_memsize() function here
++	 * to report only the size of the first DRAM bank. This is to make
++	 * U-Boot relocator place U-Boot into valid memory, that is, at the
++	 * end of the first DRAM bank. If we did not override this function
++	 * like so, U-Boot would be placed at the address of the first DRAM
++	 * bank + total DRAM size - sizeof(uboot), which in the setup where
++	 * each DRAM bank contains 512MiB of DRAM would result in placing
++	 * U-Boot into invalid memory area close to the end of the first
++	 * DRAM bank.
++	 */
++	return mx53_dram_size[0];
++}
+ 
+-	size1 = get_ram_size((void *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
+-	size2 = get_ram_size((void *)PHYS_SDRAM_2, PHYS_SDRAM_2_SIZE);
++int dram_init(void)
++{
++	mx53_dram_size[0] = get_ram_size((void *)PHYS_SDRAM_1, 1 << 30);
++	mx53_dram_size[1] = get_ram_size((void *)PHYS_SDRAM_2, 1 << 30);
+ 
+-	gd->ram_size = size1 + size2;
++	gd->ram_size = mx53_dram_size[0] + mx53_dram_size[1];
+ 
+ 	return 0;
+ }
++
+ void dram_init_banksize(void)
+ {
+ 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
+-	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
++	gd->bd->bi_dram[0].size = mx53_dram_size[0];
+ 
+ 	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
+-	gd->bd->bi_dram[1].size = PHYS_SDRAM_2_SIZE;
++	gd->bd->bi_dram[1].size = mx53_dram_size[1];
+ }
+ 
+ static void setup_iomux_uart(void)
+diff --git a/include/configs/m53evk.h b/include/configs/m53evk.h
+index d592318..1324877 100644
+--- a/include/configs/m53evk.h
++++ b/include/configs/m53evk.h
+@@ -56,15 +56,13 @@
+  */
+ #define CONFIG_NR_DRAM_BANKS		2
+ #define PHYS_SDRAM_1			CSD0_BASE_ADDR
+-#define PHYS_SDRAM_1_SIZE		(512 * 1024 * 1024)
++#define PHYS_SDRAM_1_SIZE		(gd->bd->bi_dram[0].size)
+ #define PHYS_SDRAM_2			CSD1_BASE_ADDR
+-#define PHYS_SDRAM_2_SIZE		(512 * 1024 * 1024)
+-#define PHYS_SDRAM_SIZE			(PHYS_SDRAM_1_SIZE + PHYS_SDRAM_2_SIZE)
++#define PHYS_SDRAM_2_SIZE		(gd->bd->bi_dram[1].size)
++#define PHYS_SDRAM_SIZE			(gd->ram_size)
+ #define CONFIG_SYS_MALLOC_LEN		(10 * 1024 * 1024)
+ #define CONFIG_SYS_MEMTEST_START	0x70000000
+ #define CONFIG_SYS_MEMTEST_END		0x8ff00000
+-#define CONFIG_VERY_BIG_RAM
+-#define CONFIG_MAX_MEM_MAPPED		PHYS_SDRAM_1_SIZE
+ 
+ #define CONFIG_SYS_SDRAM_BASE		(PHYS_SDRAM_1)
+ #define CONFIG_SYS_INIT_RAM_ADDR	(IRAM_BASE_ADDR)
+-- 
+1.9.0
+

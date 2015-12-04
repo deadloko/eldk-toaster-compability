@@ -1,0 +1,30 @@
+From e01754caee9ca3c8cdff9bee8c56d19ac1dcd1e0 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Wed, 9 Jan 2013 16:12:44 +0100
+Subject: [PATCH 10/20] video: IPU KMS RGB565 to BGR565 ordering hack
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ drivers/staging/imx-drm/ipu-v3/ipu-dc.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/staging/imx-drm/ipu-v3/ipu-dc.c b/drivers/staging/imx-drm/ipu-v3/ipu-dc.c
+index 59f03f9..f856fd9 100644
+--- a/drivers/staging/imx-drm/ipu-v3/ipu-dc.c
++++ b/drivers/staging/imx-drm/ipu-v3/ipu-dc.c
+@@ -372,9 +372,9 @@ int ipu_dc_init(struct ipu_soc *ipu, struct device *dev,
+ 
+ 	/* rgb24 */
+ 	ipu_dc_map_clear(priv, IPU_DC_MAP_RGB24);
+-	ipu_dc_map_config(priv, IPU_DC_MAP_RGB24, 0, 7, 0xff); /* blue */
+-	ipu_dc_map_config(priv, IPU_DC_MAP_RGB24, 1, 15, 0xff); /* green */
+-	ipu_dc_map_config(priv, IPU_DC_MAP_RGB24, 2, 23, 0xff); /* red */
++	ipu_dc_map_config(priv, IPU_DC_MAP_RGB24, 0, 5, 0xfc); /* blue */
++	ipu_dc_map_config(priv, IPU_DC_MAP_RGB24, 1, 11, 0xfc); /* green */
++	ipu_dc_map_config(priv, IPU_DC_MAP_RGB24, 2, 17, 0xfc); /* red */
+ 
+ 	/* rgb565 */
+ 	ipu_dc_map_clear(priv, IPU_DC_MAP_RGB565);
+-- 
+1.8.4.3
+

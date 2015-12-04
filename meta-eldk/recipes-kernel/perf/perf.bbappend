@@ -1,0 +1,5 @@
+PERF_FEATURES_ENABLE ?= ""
+
+EXTRA_OEMAKE += "\
+		NO_NEWT=1 \
+		"

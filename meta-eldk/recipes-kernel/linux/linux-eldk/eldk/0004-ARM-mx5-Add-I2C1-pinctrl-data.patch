@@ -1,0 +1,35 @@
+From 1c354a905e36651ba752ef25c3cbc90bde4ff7e9 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Sat, 29 Dec 2012 23:35:58 +0100
+Subject: [PATCH 04/20] ARM: mx5: Add I2C1 pinctrl data
+
+This patch adds pinctrl data for different mux of I2C1 on MX53.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Fabio Estevam <fabio.estevam@freescale.com>
+Cc: Shawn Guo <shawn.guo@linaro.org>
+---
+ arch/arm/boot/dts/imx53.dtsi | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm/boot/dts/imx53.dtsi b/arch/arm/boot/dts/imx53.dtsi
+index 8b78766..890381c 100644
+--- a/arch/arm/boot/dts/imx53.dtsi
++++ b/arch/arm/boot/dts/imx53.dtsi
+@@ -440,6 +440,13 @@
+ 							MX53_PAD_CSI0_DAT9__I2C1_SCL 0xc0000000
+ 						>;
+ 					};
++
++					pinctrl_i2c1_2: i2c1grp-2 {
++						fsl,pins = <
++							MX53_PAD_EIM_D21__I2C1_SCL 0xc0000000
++							MX53_PAD_EIM_D28__I2C1_SDA 0xc0000000
++						>;
++					};
+ 				};
+ 
+ 				i2c2 {
+-- 
+1.8.4.3
+

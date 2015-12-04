@@ -1,0 +1,10 @@
+--- gcc-4_6-branch/gcc/config/mips/t-mips.orig  2011-09-03 05:58:07.000000000 +0300
++++ gcc-4_6-branch/gcc/config/mips/t-mips       2011-10-18 19:14:39.000000000 +0300
+@@ -39,3 +39,7 @@
+        cat $(srcdir)/config/fp-bit.c >> fp-bit.c
+
+ LIB2_SIDITI_CONV_FUNCS=yes
++
++MULTILIB_OPTIONS = msoft-float
++MULTILIB_DIRNAMES = nof
++MULTILIB_MATCHES =

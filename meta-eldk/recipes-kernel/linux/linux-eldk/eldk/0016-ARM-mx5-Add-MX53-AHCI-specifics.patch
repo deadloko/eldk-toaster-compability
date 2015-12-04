@@ -1,0 +1,238 @@
+From 94242bce206b9d3bc43fd41348d9a53c77b3f2a8 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Thu, 3 Jan 2013 08:53:12 +0100
+Subject: [PATCH 16/20] ARM: mx5: Add MX53 AHCI specifics
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ arch/arm/mach-imx/devices/platform-ahci-imx.c | 112 ++++++++++++++++++++++++++
+ drivers/ata/ahci_platform.c                   |  42 ++++++++--
+ include/linux/ahci_platform.h                 |  14 ++++
+ 3 files changed, 160 insertions(+), 8 deletions(-)
+ create mode 100644 arch/arm/mach-imx/devices/platform-ahci-imx.c
+
+diff --git a/arch/arm/mach-imx/devices/platform-ahci-imx.c b/arch/arm/mach-imx/devices/platform-ahci-imx.c
+new file mode 100644
+index 0000000..6bb6d87
+--- /dev/null
++++ b/arch/arm/mach-imx/devices/platform-ahci-imx.c
+@@ -0,0 +1,112 @@
++/*
++ * Copyright (C) 2011 Freescale Semiconductor, Inc. All Rights Reserved.
++ */
++
++/*
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++
++ * You should have received a copy of the GNU General Public License along
++ * with this program; if not, write to the Free Software Foundation, Inc.,
++ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++ */
++
++#include <linux/io.h>
++#include <linux/clk.h>
++#include <linux/err.h>
++#include <linux/device.h>
++#include <linux/dma-mapping.h>
++#include <asm/sizes.h>
++
++enum {
++	HOST_CAP = 0x00,
++	HOST_CAP_SSS = (1 << 27), /* Staggered Spin-up */
++	HOST_PORTS_IMPL	= 0x0c,
++	HOST_TIMER1MS = 0xe0, /* Timer 1-ms */
++};
++
++static struct clk *sata_clk, *sata_ref_clk;
++
++/* AHCI module Initialization, if return 0, initialization is successful. */
++int imx_sata_init(struct device *dev, void __iomem *addr)
++{
++	u32 tmpdata;
++	int ret = 0;
++	struct clk *clk;
++
++	sata_clk = clk_get(dev, "ahci");
++	if (IS_ERR(sata_clk)) {
++		dev_err(dev, "no sata clock.\n");
++		return PTR_ERR(sata_clk);
++	}
++	ret = clk_prepare_enable(sata_clk);
++	if (ret) {
++		dev_err(dev, "can't prepare/enable sata clock.\n");
++		goto put_sata_clk;
++	}
++
++	/* Get the AHCI SATA PHY CLK */
++	sata_ref_clk = clk_get(dev, "ahci_phy");
++	if (IS_ERR(sata_ref_clk)) {
++		dev_err(dev, "no sata ref clock.\n");
++		ret = PTR_ERR(sata_ref_clk);
++		goto release_sata_clk;
++	}
++	ret = clk_prepare_enable(sata_ref_clk);
++	if (ret) {
++		dev_err(dev, "can't prepare/enable sata ref clock.\n");
++		goto put_sata_ref_clk;
++	}
++
++	/* Get the AHB clock rate, and configure the TIMER1MS reg later */
++	clk = clk_get(dev, "ahci_dma");
++	if (IS_ERR(clk)) {
++		dev_err(dev, "no dma clock.\n");
++		ret = PTR_ERR(clk);
++		goto release_sata_ref_clk;
++	}
++	tmpdata = clk_get_rate(clk) / 1000;
++	clk_put(clk);
++
++	writel(tmpdata, addr + HOST_TIMER1MS);
++
++	tmpdata = readl(addr + HOST_CAP);
++	if (!(tmpdata & HOST_CAP_SSS)) {
++		tmpdata |= HOST_CAP_SSS;
++		writel(tmpdata, addr + HOST_CAP);
++	}
++
++	if (!(readl(addr + HOST_PORTS_IMPL) & 0x1))
++		writel((readl(addr + HOST_PORTS_IMPL) | 0x1),
++			addr + HOST_PORTS_IMPL);
++
++	return 0;
++
++release_sata_ref_clk:
++	clk_disable_unprepare(sata_ref_clk);
++put_sata_ref_clk:
++	clk_put(sata_ref_clk);
++release_sata_clk:
++	clk_disable_unprepare(sata_clk);
++put_sata_clk:
++	clk_put(sata_clk);
++
++	return ret;
++}
++
++void imx_sata_exit(struct device *dev)
++{
++	clk_disable_unprepare(sata_ref_clk);
++	clk_put(sata_ref_clk);
++
++	clk_disable_unprepare(sata_clk);
++	clk_put(sata_clk);
++
++}
+diff --git a/drivers/ata/ahci_platform.c b/drivers/ata/ahci_platform.c
+index 7a8a284..851e3a8 100644
+--- a/drivers/ata/ahci_platform.c
++++ b/drivers/ata/ahci_platform.c
+@@ -23,6 +23,8 @@
+ #include <linux/platform_device.h>
+ #include <linux/libata.h>
+ #include <linux/ahci_platform.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
+ #include "ahci.h"
+ 
+ static void ahci_host_stop(struct ata_host *host);
+@@ -82,17 +84,34 @@ static const struct ata_port_info ahci_port_info[] = {
+ 	},
+ };
+ 
++static struct ahci_platform_data ahci_pdata[] = {
++	[AHCI] = { },
++	[IMX53_AHCI] = {
++		.init		= imx_sata_init,
++		.exit		= imx_sata_exit,
++	},
++	[STRICT_AHCI] = { },
++};
++
+ static struct scsi_host_template ahci_platform_sht = {
+ 	AHCI_SHT("ahci_platform"),
+ };
+ 
++static const struct of_device_id ahci_of_match[] = {
++	{ .compatible = "snps,spear-ahci", .data = (void *)AHCI, },
++	{ .compatible = "fsl,imx53-ahci", .data = (void *)IMX53_AHCI, },
++	{},
++};
++
+ static int ahci_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+-	struct ahci_platform_data *pdata = dev_get_platdata(dev);
+-	const struct platform_device_id *id = platform_get_device_id(pdev);
+-	struct ata_port_info pi = ahci_port_info[id ? id->driver_data : 0];
+-	const struct ata_port_info *ppi[] = { &pi, NULL };
++	const struct of_device_id *of_id = of_match_device(ahci_of_match, dev);
++	struct device_node *np = pdev->dev.of_node;
++	struct ahci_platform_data *pdata;
++	const struct platform_device_id *id;
++	struct ata_port_info pi;
++	const struct ata_port_info *ppi[] = { NULL, NULL };
+ 	struct ahci_host_priv *hpriv;
+ 	struct ata_host *host;
+ 	struct resource *mem;
+@@ -101,6 +120,17 @@ static int ahci_probe(struct platform_device *pdev)
+ 	int i;
+ 	int rc;
+ 
++	if (np && of_id->data) {
++		pdata = &ahci_pdata[(enum ahci_type)of_id->data];
++		pi = ahci_port_info[(enum ahci_type)of_id->data];
++	} else {
++		pdata = dev_get_platdata(dev);
++		id = platform_get_device_id(pdev);
++		pi = ahci_port_info[id ? id->driver_data : 0];
++	}
++
++	ppi[0] = &pi;
++
+ 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 	if (!mem) {
+ 		dev_err(dev, "no mmio space\n");
+@@ -325,10 +355,6 @@ disable_unprepare_clk:
+ 
+ static SIMPLE_DEV_PM_OPS(ahci_pm_ops, ahci_suspend, ahci_resume);
+ 
+-static const struct of_device_id ahci_of_match[] = {
+-	{ .compatible = "snps,spear-ahci", },
+-	{},
+-};
+ MODULE_DEVICE_TABLE(of, ahci_of_match);
+ 
+ static struct platform_driver ahci_driver = {
+diff --git a/include/linux/ahci_platform.h b/include/linux/ahci_platform.h
+index 73a2500..f1e6ce0 100644
+--- a/include/linux/ahci_platform.h
++++ b/include/linux/ahci_platform.h
+@@ -30,4 +30,18 @@ struct ahci_platform_data {
+ 	unsigned int mask_port_map;
+ };
+ 
++#ifdef CONFIG_IMX_HAVE_PLATFORM_AHCI
++int imx_sata_init(struct device *dev, void __iomem *addr);
++void imx_sata_exit(struct device *dev);
++#else
++static inline int imx_sata_init(struct device *dev, void __iomem *addr)
++{
++	return 0;
++}
++
++static inline void imx_sata_exit(struct device *dev)
++{
++}
++#endif
++
+ #endif /* _AHCI_PLATFORM_H */
+-- 
+1.8.4.3
+

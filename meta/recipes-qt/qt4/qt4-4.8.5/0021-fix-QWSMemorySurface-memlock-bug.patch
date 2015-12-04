@@ -1,0 +1,44 @@
+From 0d465c2b1ab619e4336cfab5e0301e3b1bd64fab Mon Sep 17 00:00:00 2001
+From: Anatolij Gustschin <agust@denx.de>
+Date: Tue, 19 Jun 2012 20:58:07 +0200
+Subject: [PATCH] fix QWSMemorySurface memlock bug
+
+Qt 4.8.x commit 480eeaf650fa05a961d7fd59c1762102cb0edb61
+(don't delete the lock if it was not created by this surface)
+introduced a bug causing overwriting of the existing surface lock.
+As a result we see following errors when a QWS client application
+is running:
+
+QWSLock::up: Invalid argument
+QWSLock::unlock: Invalid argument
+QWSLock::lock: Invalid argument
+QWSLock::unlock: Invalid argument
+...
+
+Don't create a new memlock if the old hasn't been deleted.
+
+Signed-off-by: Anatolij Gustschin <agust@denx.de>
+---
+ src/gui/painting/qwindowsurface_qws.cpp |    5 +++--
+ 1 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/gui/painting/qwindowsurface_qws.cpp b/src/gui/painting/qwindowsurface_qws.cpp
+index 7ff4865..b961f3e 100644
+--- a/src/gui/painting/qwindowsurface_qws.cpp
++++ b/src/gui/painting/qwindowsurface_qws.cpp
+@@ -856,9 +856,10 @@ void QWSMemorySurface::setLock(int lockId)
+ {
+     if (memlock && memlock->id() == lockId)
+         return;
+-    if (memlock != QWSDisplay::Data::getClientLock())
++    if (memlock != QWSDisplay::Data::getClientLock()) {
+         delete memlock;
+-    memlock = (lockId == -1 ? 0 : new QWSLock(lockId));
++        memlock = (lockId == -1 ? 0 : new QWSLock(lockId));
++    }
+ }
+ #endif // QT_NO_QWS_MULTIPROCESS
+ 
+-- 
+1.7.5.4
+

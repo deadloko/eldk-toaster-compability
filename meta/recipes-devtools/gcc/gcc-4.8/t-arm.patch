@@ -1,0 +1,10 @@
+--- gcc-4.8.1/gcc/config/arm/t-arm.orig  2013-03-07 00:29:08.000000000 +0100
++++ gcc-4.8.1/gcc/config/arm/t-arm       2013-10-24 09:44:43.116061723 +0200
+@@ -90,3 +90,7 @@
+    coretypes.h $(TM_H) $(TREE_H) output.h $(C_COMMON_H)
+	$(COMPILER) -c $(ALL_COMPILERFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
+		$(srcdir)/config/arm/arm-c.c
++
++MULTILIB_OPTIONS = msoft-float
++MULTILIB_DIRNAMES = nof
++MULTILIB_MATCHES =

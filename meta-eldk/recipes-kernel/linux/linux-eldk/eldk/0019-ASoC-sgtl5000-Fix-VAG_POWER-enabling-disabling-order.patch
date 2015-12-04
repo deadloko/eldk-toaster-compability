@@ -1,0 +1,82 @@
+From d79998445c643d0e9056d0f7b51e592a2392de8e Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Fri, 24 May 2013 04:33:04 +0200
+Subject: [PATCH 19/20] ASoC: sgtl5000: Fix VAG_POWER enabling/disabling order
+
+The VAG_POWER must be enabled after all other bits in CHIP_ANA_POWER
+and disabled before any other bit in CHIP_ANA_POWER. See the SGTL5000
+datasheet (Table 31, BIT 7, page 42-43). Failing to follow this order
+will result in ugly loud "POP" noise at the end of playback.
+
+To achieve such order, use the _PRE and _POST DAPM widgets to trigger
+the power_vag_event, where the event type check has to be fixed
+accordingly as well.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Cc: Dong Aisheng <dong.aisheng@linaro.org>
+Cc: Eric Nelson <eric.nelson@boundarydevices.com>
+Cc: Fabio Estevam <fabio.estevam@freescale.com>
+Cc: Mark Brown <broonie@opensource.wolfsonmicro.com>
+---
+ sound/soc/codecs/sgtl5000.c | 16 ++++++----------
+ 1 file changed, 6 insertions(+), 10 deletions(-)
+
+diff --git a/sound/soc/codecs/sgtl5000.c b/sound/soc/codecs/sgtl5000.c
+index ea47938..96f60e0 100644
+--- a/sound/soc/codecs/sgtl5000.c
++++ b/sound/soc/codecs/sgtl5000.c
+@@ -151,15 +151,15 @@ static int power_vag_event(struct snd_soc_dapm_widget *w,
+ 	struct snd_kcontrol *kcontrol, int event)
+ {
+ 	switch (event) {
+-	case SND_SOC_DAPM_PRE_PMU:
++	case SND_SOC_DAPM_POST_PMU:
+ 		snd_soc_update_bits(w->codec, SGTL5000_CHIP_ANA_POWER,
+ 			SGTL5000_VAG_POWERUP, SGTL5000_VAG_POWERUP);
+ 		break;
+ 
+-	case SND_SOC_DAPM_POST_PMD:
++	case SND_SOC_DAPM_PRE_PMD:
+ 		snd_soc_update_bits(w->codec, SGTL5000_CHIP_ANA_POWER,
+ 			SGTL5000_VAG_POWERUP, 0);
+-		msleep(400);
++		mdelay(400);
+ 		break;
+ 	default:
+ 		break;
+@@ -217,12 +217,11 @@ static const struct snd_soc_dapm_widget sgtl5000_dapm_widgets[] = {
+ 				0, SGTL5000_CHIP_DIG_POWER,
+ 				1, 0),
+ 
+-	SND_SOC_DAPM_SUPPLY("VAG_POWER", SGTL5000_CHIP_ANA_POWER, 7, 0,
+-			    power_vag_event,
+-			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+-
+ 	SND_SOC_DAPM_ADC("ADC", "Capture", SGTL5000_CHIP_ANA_POWER, 1, 0),
+ 	SND_SOC_DAPM_DAC("DAC", "Playback", SGTL5000_CHIP_ANA_POWER, 3, 0),
++
++	SND_SOC_DAPM_PRE("VAG_POWER_PRE", power_vag_event),
++	SND_SOC_DAPM_POST("VAG_POWER_POST", power_vag_event),
+ };
+ 
+ /* routes for sgtl5000 */
+@@ -230,16 +229,13 @@ static const struct snd_soc_dapm_route sgtl5000_dapm_routes[] = {
+ 	{"Capture Mux", "LINE_IN", "LINE_IN"},	/* line_in --> adc_mux */
+ 	{"Capture Mux", "MIC_IN", "MIC_IN"},	/* mic_in --> adc_mux */
+ 
+-	{"ADC", NULL, "VAG_POWER"},
+ 	{"ADC", NULL, "Capture Mux"},		/* adc_mux --> adc */
+ 	{"AIFOUT", NULL, "ADC"},		/* adc --> i2s_out */
+ 
+-	{"DAC", NULL, "VAG_POWER"},
+ 	{"DAC", NULL, "AIFIN"},			/* i2s-->dac,skip audio mux */
+ 	{"Headphone Mux", "DAC", "DAC"},	/* dac --> hp_mux */
+ 	{"LO", NULL, "DAC"},			/* dac --> line_out */
+ 
+-	{"LINE_IN", NULL, "VAG_POWER"},
+ 	{"Headphone Mux", "LINE_IN", "LINE_IN"},/* line_in --> hp_mux */
+ 	{"HP", NULL, "Headphone Mux"},		/* hp_mux --> hp */
+ 
+-- 
+1.8.4.3
+

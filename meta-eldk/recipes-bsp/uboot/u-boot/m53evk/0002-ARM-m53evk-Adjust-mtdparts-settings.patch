@@ -1,0 +1,61 @@
+From 6a063bbd24e822a7ec2e0d34439e41ab08bccf33 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Wed, 13 Nov 2013 01:18:31 +0100
+Subject: [PATCH 3/4] ARM: m53evk: Adjust mtdparts settings
+
+Adjust the mtdparts settings to allow for alternative boot images and
+for using UBI
+
+Also fix the MTD device ID for the NAND flash: the Linux kernel
+expects 'mxc_nand', not 'mxc-nand'.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+Signed-off-by: Wolfgang Denk <wd@denx.de>
+Cc: Stefano Babic <sbabic@denx.de>
+---
+ include/configs/m53evk.h | 21 ++++++++++-----------
+ 1 file changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/include/configs/m53evk.h b/include/configs/m53evk.h
+index a344af4..7f33b8e 100644
+--- a/include/configs/m53evk.h
++++ b/include/configs/m53evk.h
+@@ -128,8 +128,8 @@
+ #define CONFIG_ENV_IS_IN_NAND
+ #define CONFIG_ENV_SIZE_REDUND		CONFIG_ENV_SIZE
+ #define CONFIG_ENV_SECT_SIZE		(128 * 1024)
+-#define CONFIG_ENV_RANGE		(512 * 1024)
+-#define CONFIG_ENV_OFFSET		0x100000
++#define CONFIG_ENV_RANGE		(4 * CONFIG_ENV_SECT_SIZE)
++#define CONFIG_ENV_OFFSET		(8 * CONFIG_ENV_SECT_SIZE) /* 1 MiB */
+ #define CONFIG_ENV_OFFSET_REDUND	\
+ 		(CONFIG_ENV_OFFSET + CONFIG_ENV_RANGE)
+ 
+@@ -140,16 +140,15 @@
+ #define CONFIG_LZO
+ #define CONFIG_MTD_DEVICE
+ #define CONFIG_MTD_PARTITIONS
+-#define MTDIDS_DEFAULT			"nand0=mxc-nand"
++#define MTDIDS_DEFAULT			"nand0=mxc_nand"
+ #define MTDPARTS_DEFAULT			\
+-	"mtdparts=mxc-nand:"			\
+-		"1m(bootloader)ro,"		\
+-		"512k(environment),"		\
+-		"512k(redundant-environment),"	\
+-		"4m(kernel),"			\
+-		"128k(fdt),"			\
+-		"8m(ramdisk),"			\
+-		"-(filesystem)"
++	"mtdparts=mxc_nand:"			\
++		"1024k(u-boot),"		\
++		"512k(env1),"			\
++		"512k(env2),"			\
++		"14m(boot),"			\
++		"240m(data),"			\
++		"-@2048k(UBI)"
+ #else
+ #define CONFIG_ENV_IS_NOWHERE
+ #endif
+-- 
+1.8.3.1
+

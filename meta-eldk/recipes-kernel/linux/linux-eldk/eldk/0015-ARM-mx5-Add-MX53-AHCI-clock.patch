@@ -1,0 +1,48 @@
+From d7a2034903bb1695bf73ddefbd97c5fe1bad8c2b Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Thu, 3 Jan 2013 08:53:12 +0100
+Subject: [PATCH 15/20] ARM: mx5: Add MX53 AHCI clock
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ arch/arm/mach-imx/clk-imx51-imx53.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm/mach-imx/clk-imx51-imx53.c b/arch/arm/mach-imx/clk-imx51-imx53.c
+index 6fc486b..4d95db4 100644
+--- a/arch/arm/mach-imx/clk-imx51-imx53.c
++++ b/arch/arm/mach-imx/clk-imx51-imx53.c
+@@ -110,6 +110,7 @@ enum imx5_clks {
+ 	owire_gate, gpu3d_s, gpu2d_s, gpu3d_gate, gpu2d_gate, garb_gate,
+ 	cko1_sel, cko1_podf, cko1,
+ 	cko2_sel, cko2_podf, cko2,
++	sata_clk, ahci_phy_clk, ahci_dma_clk,
+ 	srtc_gate, pata_gate,
+ 	clk_max
+ };
+@@ -212,6 +213,12 @@ static void __init mx5_clocks_common_init(unsigned long rate_ckil,
+ 	clk[ssi1_ipg_gate] = imx_clk_gate2("ssi1_ipg_gate", "ipg", MXC_CCM_CCGR3, 16);
+ 	clk[ssi2_ipg_gate] = imx_clk_gate2("ssi2_ipg_gate", "ipg", MXC_CCM_CCGR3, 20);
+ 	clk[ssi3_ipg_gate] = imx_clk_gate2("ssi3_ipg_gate", "ipg", MXC_CCM_CCGR3, 24);
++
++	clk[sata_clk] = imx_clk_gate2("ahci", "ipg", MXC_CCM_CCGR4, 2);
++	/* This is wrong, the parent is "osc", but I need usb phy1 CLK enabled */
++	clk[ahci_phy_clk] = imx_clk_fixed_factor("ahci_phy", "usb_phy1_gate", 1, 1);
++	clk[ahci_dma_clk] = imx_clk_fixed_factor("ahci_dma", "ahb", 1, 1);
++
+ 	clk[ecspi1_ipg_gate] = imx_clk_gate2("ecspi1_ipg_gate", "ipg", MXC_CCM_CCGR4, 18);
+ 	clk[ecspi1_per_gate] = imx_clk_gate2("ecspi1_per_gate", "ecspi_podf", MXC_CCM_CCGR4, 20);
+ 	clk[ecspi2_ipg_gate] = imx_clk_gate2("ecspi2_ipg_gate", "ipg", MXC_CCM_CCGR4, 22);
+@@ -310,6 +317,9 @@ static void __init mx5_clocks_common_init(unsigned long rate_ckil,
+ 	clk_register_clkdev(clk[ssi1_ipg_gate], NULL, "imx-ssi.0");
+ 	clk_register_clkdev(clk[ssi2_ipg_gate], NULL, "imx-ssi.1");
+ 	clk_register_clkdev(clk[ssi3_ipg_gate], NULL, "imx-ssi.2");
++	clk_register_clkdev(clk[sata_clk], "ahci", "10000000.ahci");
++	clk_register_clkdev(clk[ahci_phy_clk], "ahci_phy", "10000000.ahci");
++	clk_register_clkdev(clk[ahci_dma_clk], "ahci_dma", "10000000.ahci");
+ 	clk_register_clkdev(clk[ssi_ext1_gate], "ssi_ext1", NULL);
+ 	clk_register_clkdev(clk[ssi_ext2_gate], "ssi_ext2", NULL);
+ 	clk_register_clkdev(clk[sdma_gate], NULL, "imx35-sdma");
+-- 
+1.8.4.3
+

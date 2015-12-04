@@ -1,0 +1,12 @@
+diff -Nur ../util-linux-2.22.2.orig/Makefile.am ./Makefile.am
+--- ../util-linux-2.22.2.orig/Makefile.am	2012-10-10 16:10:30.000000000 +0400
++++ ./Makefile.am	2013-02-04 18:22:41.023440000 +0400
+@@ -24,7 +24,7 @@
+ ul_libmount_incdir = $(top_builddir)/libmount/src
+ ul_libuuid_incdir  = $(top_srcdir)/libuuid/src
+ 
+-pkgconfigdir = $(usrlib_execdir)/pkgconfig
++pkgconfigdir = $(exec_prefix)/lib/pkgconfig
+ 
+ dist_noinst_HEADERS =
+ noinst_PROGRAMS =

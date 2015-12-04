@@ -1,0 +1,12 @@
+diff -Nur ../util-linux-2.22.2.orig/configure.ac ./configure.ac
+--- ../util-linux-2.22.2.orig/configure.ac	2013-02-05 14:11:14.243440001 +0400
++++ ./configure.ac	2013-02-05 14:11:38.371440001 +0400
+@@ -80,7 +80,7 @@
+ AC_SUBST([usrsbin_execdir])
+ 
+ case $libdir in
+- ${exec_prefix}/* | ${prefix}/* | /usr/*)
++ ${exec_prefix}/* | ${prefix}/* | /usr/* | /opt/*/sysroots/*)
+     usrlib_execdir=$libdir ;;
+  *)
+     usrlib_execdir='${exec_prefix}'$libdir ;;

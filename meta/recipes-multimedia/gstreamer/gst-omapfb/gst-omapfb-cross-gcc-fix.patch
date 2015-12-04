@@ -1,0 +1,10 @@
+diff --git a/Makefile b/Makefile
+index fa8ec7d..bc1d590 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,4 +1,4 @@
+-CROSS_COMPILE ?= arm-linux-
++CROSS_COMPILE ?= arm-linux-gnueabi-
+ CC := $(CROSS_COMPILE)gcc
+ 
+ CFLAGS := -O2 -ggdb -Wall -Wextra -Wno-unused-parameter -Wmissing-prototypes -ansi -std=c99

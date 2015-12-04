@@ -1,0 +1,43 @@
+From 94633a2418690d777cc6b987e98a82f540dcd9e6 Mon Sep 17 00:00:00 2001
+From: Wolfgang Denk <wd@denx.de>
+Date: Fri, 31 Jan 2014 09:20:45 +0100
+Subject: [PATCH 1/5] EXT4: Fix number base handling of "ext4write" command
+
+Unlike other commands (for example, "fatwrite"), ext4write would
+interpret the "sizebytes" as decimal number.  This is not only
+inconsistend and unexpected to most users, it also breaks usage
+like this:
+
+	tftp ${addr} ${name}
+	ext4write mmc 0:2 ${addr} ${filename} ${filesize}
+
+Change this to use the standard notation of base 16 input format.
+See also commit b770e88
+
+WARNING: this is a change to the user interface!!
+
+Signed-off-by: Wolfgang Denk <wd@denx.de>
+Cc: Uma Shankar <uma.shankar@samsung.com>
+Cc: Stephen Warren <swarren@nvidia.com>
+---
+ common/cmd_ext4.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/common/cmd_ext4.c b/common/cmd_ext4.c
+index 8289d25..68b047b 100644
+--- a/common/cmd_ext4.c
++++ b/common/cmd_ext4.c
+@@ -79,8 +79,8 @@ int do_ext4_write(cmd_tbl_t *cmdtp, int flag, int argc,
+ 	/* get the address in hexadecimal format (string to int) */
+ 	ram_address = simple_strtoul(argv[3], NULL, 16);
+ 
+-	/* get the filesize in base 10 format */
+-	file_size = simple_strtoul(argv[5], NULL, 10);
++	/* get the filesize in hexadecimal format */
++	file_size = simple_strtoul(argv[5], NULL, 16);
+ 
+ 	/* set the device as block device */
+ 	ext4fs_set_blk_dev(dev_desc, &info);
+-- 
+1.8.3.1
+

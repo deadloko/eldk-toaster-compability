@@ -1,0 +1,10 @@
+--- gcc-4.8.1/gcc/config/mips/t-mips.orig  2011-11-02 05:58:07.000000000 +0300
++++ gcc-4.8.1/gcc/config/mips/t-mips       2012-10-16 19:14:39.000000000 +0300
+@@ -20,3 +20,7 @@
+  $(srcdir)/config/mips/mips-cpus.def
+	$(SHELL) $(srcdir)/config/mips/genopt.sh $(srcdir)/config/mips > \
+		$(srcdir)/config/mips/mips-tables.opt
++
++MULTILIB_OPTIONS = msoft-float
++MULTILIB_DIRNAMES = nof
++MULTILIB_MATCHES =

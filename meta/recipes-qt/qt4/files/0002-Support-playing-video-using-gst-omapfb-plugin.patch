@@ -1,0 +1,435 @@
+From 9535b89bfaded52b500d92bd25fdacdaa76779b8 Mon Sep 17 00:00:00 2001
+From: Anatolij Gustschin <agust@denx.de>
+Date: Tue, 29 Nov 2011 17:05:27 +0100
+Subject: [PATCH 2/2] Support playing video using gst-omapfb plugin
+
+Using this extension QML video element plays video
+using gst-omapfb plugin. The video is rendered into
+the overlay plane when QT_MOBILITY_VIDEO_BACKEND
+environment variable is set to 'omapfb'. The up- and
+down-scaling is performed by the display controller,
+so the CPU utilisation while playing video is reduced.
+
+Signed-off-by: Anatolij Gustschin <agust@denx.de>
+---
+ .../mediaplayer/qgstreamerplayerservice.cpp        |    5 +-
+ .../gstreamer/qgstreamervideorenderer.cpp          |   69 ++++++
+ .../multimedia/gstreamer/qgstreamervideorenderer.h |   28 +++
+ src/multimedia/qgraphicsvideoitem.cpp              |  222 +++++++++++++++++++-
+ 4 files changed, 322 insertions(+), 2 deletions(-)
+
+diff --git a/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayerservice.cpp b/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayerservice.cpp
+index 6976c18..61f0ad6 100644
+--- a/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayerservice.cpp
++++ b/plugins/multimedia/gstreamer/mediaplayer/qgstreamerplayerservice.cpp
+@@ -77,7 +77,10 @@ QGstreamerPlayerService::QGstreamerPlayerService(QObject *parent):
+ #if defined(Q_WS_MAEMO_6) && defined(__arm__)
+     m_videoRenderer = new QGstreamerGLTextureRenderer(this);
+ #else
+-    m_videoRenderer = new QGstreamerVideoRenderer(this);
++    if (qgetenv("QT_MOBILITY_VIDEO_BACKEND") == "omapfb")
++        m_videoRenderer = new QGstreamerOmapFbVideoRenderer(this);
++    else
++        m_videoRenderer = new QGstreamerVideoRenderer(this);
+ #endif
+ 
+ #if defined(Q_WS_X11) && !defined(QT_NO_XVIDEO)
+diff --git a/plugins/multimedia/gstreamer/qgstreamervideorenderer.cpp b/plugins/multimedia/gstreamer/qgstreamervideorenderer.cpp
+index 6c4e6b9..61d3b23 100644
+--- a/plugins/multimedia/gstreamer/qgstreamervideorenderer.cpp
++++ b/plugins/multimedia/gstreamer/qgstreamervideorenderer.cpp
+@@ -118,3 +118,72 @@ void QGstreamerVideoRenderer::handleFormatChange()
+     m_videoSink = 0;
+     emit sinkChanged();
+ }
++
++QGstreamerOmapFbVideoRenderer::QGstreamerOmapFbVideoRenderer(QObject *parent)
++    :QVideoRendererControl(parent),m_videoSink(0), m_surface(0)
++{
++}
++
++QGstreamerOmapFbVideoRenderer::~QGstreamerOmapFbVideoRenderer()
++{
++    if (m_videoSink)
++        gst_object_unref(GST_OBJECT(m_videoSink));
++}
++
++
++QAbstractVideoSurface *QGstreamerOmapFbVideoRenderer::surface() const
++{
++    return m_surface;
++}
++
++void QGstreamerOmapFbVideoRenderer::setSurface(QAbstractVideoSurface *surface)
++{
++    if (m_surface != surface) {
++        if (m_videoSink)
++            gst_object_unref(GST_OBJECT(m_videoSink));
++
++        m_videoSink = 0;
++
++        if (m_surface) {
++            disconnect(m_surface, SIGNAL(supportedFormatsChanged()),
++                       this, SLOT(handleFormatChange()));
++        }
++
++        m_surface = surface;
++
++        if (surface && !m_surface)
++            emit readyChanged(true);
++
++        if (!surface && m_surface)
++            emit readyChanged(false);
++
++        if (m_surface) {
++            connect(m_surface, SIGNAL(supportedFormatsChanged()),
++                    this, SLOT(handleFormatChange()));
++        }
++
++        emit sinkChanged();
++    }
++}
++
++void QGstreamerOmapFbVideoRenderer::handleFormatChange()
++{
++    if (m_videoSink)
++        gst_object_unref(GST_OBJECT(m_videoSink));
++
++    m_videoSink = 0;
++    emit sinkChanged();
++}
++
++GstElement *QGstreamerOmapFbVideoRenderer::videoSink()
++{
++    if (!m_videoSink && m_surface) {
++        m_videoSink = gst_element_factory_make("omapfbsink", NULL);
++        if (m_videoSink) {
++            gst_object_ref(GST_OBJECT(m_videoSink));
++            gst_object_sink(GST_OBJECT(m_videoSink));
++        }
++    }
++
++    return reinterpret_cast<GstElement*>(m_videoSink);
++}
+diff --git a/plugins/multimedia/gstreamer/qgstreamervideorenderer.h b/plugins/multimedia/gstreamer/qgstreamervideorenderer.h
+index b6c23ba..632528c 100644
+--- a/plugins/multimedia/gstreamer/qgstreamervideorenderer.h
++++ b/plugins/multimedia/gstreamer/qgstreamervideorenderer.h
+@@ -77,4 +77,32 @@ private:
+     QAbstractVideoSurface *m_surface;
+ };
+ 
++class QGstreamerOmapFbVideoRenderer : public QVideoRendererControl,
++				      public QGstreamerVideoRendererInterface
++{
++    Q_OBJECT
++    Q_INTERFACES(QGstreamerVideoRendererInterface)
++
++public:
++    QGstreamerOmapFbVideoRenderer(QObject *parent = 0);
++    virtual ~QGstreamerOmapFbVideoRenderer();
++
++    QAbstractVideoSurface *surface() const;
++    void setSurface(QAbstractVideoSurface *surface);
++
++    GstElement *videoSink();
++    void precessNewStream() {}
++
++signals:
++    void sinkChanged();
++    void readyChanged(bool);
++
++private slots:
++    void handleFormatChange();
++
++private:
++    GstElement *m_videoSink;
++    QAbstractVideoSurface *m_surface;
++};
++
+ #endif // QGSTREAMERVIDEORENDRER_H
+diff --git a/src/multimedia/qgraphicsvideoitem.cpp b/src/multimedia/qgraphicsvideoitem.cpp
+index 46f0fe7..0201160 100644
+--- a/src/multimedia/qgraphicsvideoitem.cpp
++++ b/src/multimedia/qgraphicsvideoitem.cpp
+@@ -55,11 +55,99 @@
+ #include <QtOpenGL/qgl.h>
+ #endif
+ 
++#include <QtGui/qgraphicsscene.h>
++#include <QtGui/qgraphicsview.h>
++#include <QtCore/qdebug.h>
++
++#include <fcntl.h>
++#include <unistd.h>
++#include <linux/fb.h>
++#include <linux/types.h>
++#include <linux/omapfb.h>
++#include <sys/stat.h>
++#include <sys/ioctl.h>
++
+ Q_DECLARE_METATYPE(QVideoSurfaceFormat)
+ 
+ QT_BEGIN_NAMESPACE
+ 
+-class QGraphicsVideoItemPrivate
++#undef  DEBUG
++
++#ifdef  DEBUG
++#include <stdio.h>
++#define debug(fmt,args...)      printf (fmt ,##args)
++#else
++#define debug(fmt,args...)
++#endif
++
++struct fb_var_screeninfo screen_info;
++struct omapfb_plane_info plane_info;
++int overlay_fd;
++
++int setup_plane(struct omapfb_plane_info *p, int on)
++{
++    p->enabled = on;
++    if (ioctl(overlay_fd, OMAPFB_SETUP_PLANE, p)) {
++        perror("could not setup plane");
++        return false;
++    }
++    return true;
++}
++
++#define SET_PLANE(x, y, w, h, on) \
++{ \
++        plane_info.pos_x = x; \
++        plane_info.pos_y = y; \
++        plane_info.out_width = w; \
++        plane_info.out_height = h; \
++        debug("vw %s: (map %d,%d) size %d x %d\n", \
++	       __func__, x, y, w, h); \
++	setup_plane(&plane_info, on); \
++}
++
++int init_overlay(void)
++{
++    struct stat st;
++    int ret;
++    int fd;
++
++    fd = open("/dev/fb0", O_RDONLY);
++    if (fd < 0) {
++       perror("could not open overlay");
++       return false;
++    }
++
++    if (ioctl(fd, FBIOGET_VSCREENINFO, &screen_info)) {
++        perror("could not get overlay screen info");
++        return false;
++    }
++    close(fd);
++
++    ret = stat("/dev/fb1", &st);
++    if (ret < 0) {
++        if (mknod("/dev/fb1",
++	    S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP,
++	    makedev(29, 1)) < 0) {
++            perror("can't create overlay node");
++            return -1;
++        }
++    }
++
++    overlay_fd = open("/dev/fb1", O_RDWR);
++    if (overlay_fd < 0) {
++       perror("could not open overlay");
++       return false;
++    }
++
++    if (ioctl(overlay_fd, OMAPFB_QUERY_PLANE, &plane_info)) {
++        perror("could not query plane info");
++        return false;
++    }
++
++    return setup_plane(&plane_info, 0);
++}
++
++class QGraphicsVideoItemPrivate : public QObject
+ {
+ public:
+     QGraphicsVideoItemPrivate()
+@@ -71,6 +158,9 @@ public:
+         , aspectRatioMode(Qt::KeepAspectRatio)
+         , updatePaintDevice(true)
+         , rect(0.0, 0.0, 320, 240)
++        , videoWidget(0)
++        , savedViewportUpdateMode(QGraphicsView::FullViewportUpdate)
++        , planeCtrl(false)
+     {
+     }
+ 
+@@ -87,6 +177,12 @@ public:
+     QRectF sourceRect;
+     QSizeF nativeSize;
+ 
++    QWidget *videoWidget;
++    QPointer<QGraphicsView> currentView;
++    QGraphicsView::ViewportUpdateMode savedViewportUpdateMode;
++    QList<QPointer<QObject> > eventFilterTargets;
++    bool planeCtrl;
++
+     void clearService();
+     void updateRects();
+ 
+@@ -94,8 +190,69 @@ public:
+     void _q_formatChanged(const QVideoSurfaceFormat &format);
+     void _q_updateNativeSize();
+     void _q_serviceDestroyed();
++
++    bool eventFilter(QObject *object, QEvent *event);
++    void setWidget(QWidget *widget);
++    void updateEventFilters();
++    void updatePlanePos();
+ };
+ 
++void QGraphicsVideoItemPrivate::updatePlanePos(void)
++{
++    if (!videoWidget)
++        return;
++
++    videoWidget->update();
++}
++
++bool QGraphicsVideoItemPrivate::eventFilter(QObject *object, QEvent *event)
++{
++    foreach (QPointer<QObject> target, eventFilterTargets) {
++        if (object == target.data()) {
++            switch (event->type()) {
++            case QEvent::ParentChange:
++                updateEventFilters();
++                break;
++            case QEvent::Move:
++            case QEvent::Resize:
++                updatePlanePos();
++                break;
++            default:
++                break;
++            }
++        }
++    }
++    return false;
++}
++
++void QGraphicsVideoItemPrivate::updateEventFilters()
++{
++    // In order to determine when the absolute screen position of the item
++    // changes, we need to receive move events sent to currentView
++    // or any of its ancestors.
++    foreach (QPointer<QObject> target, eventFilterTargets)
++        if (target)
++            target->removeEventFilter(this);
++
++    eventFilterTargets.clear();
++
++    QObject *target = currentView;
++    while (target) {
++        target->installEventFilter(this);
++        eventFilterTargets.append(target);
++        target = target->parent();
++    }
++}
++
++void QGraphicsVideoItemPrivate::setWidget(QWidget *widget)
++{
++    if (videoWidget != widget) {
++        videoWidget = widget;
++        if (widget)
++            widget->installEventFilter(this);
++    }
++}
++
+ void QGraphicsVideoItemPrivate::clearService()
+ {
+     if (rendererControl) {
+@@ -210,6 +367,13 @@ QGraphicsVideoItem::QGraphicsVideoItem(QGraphicsItem *parent)
+     connect(d_ptr->surface, SIGNAL(frameChanged()), this, SLOT(_q_present()));
+     connect(d_ptr->surface, SIGNAL(surfaceFormatChanged(QVideoSurfaceFormat)),
+             this, SLOT(_q_updateNativeSize()), Qt::QueuedConnection);
++
++    if (qgetenv("QT_MOBILITY_VIDEO_BACKEND") == "omapfb") {
++        if (!init_overlay())
++	    qDebug("Video plane setup failed...");
++        else
++            d_ptr->planeCtrl = true;
++    }
+ }
+ 
+ /*!
+@@ -222,6 +386,8 @@ QGraphicsVideoItem::~QGraphicsVideoItem()
+         d_ptr->service->releaseControl(d_ptr->rendererControl);
+     }
+ 
++    setup_plane(&plane_info, 0);
++    close(overlay_fd);
+     delete d_ptr->surface;
+     delete d_ptr;
+ }
+@@ -397,6 +563,60 @@ void QGraphicsVideoItem::paint(
+         d->surface->paint(painter, d->boundingRect, d->sourceRect);
+         d->surface->setReady(true);
+     }
++
++    if (d->planeCtrl) {
++	QGraphicsView *view = 0;
++	unsigned int xres, yres;
++	int xoff, yoff;
++
++	if (scene() && !scene()->views().isEmpty())
++	    view = scene()->views().first();
++
++	if (view != d->currentView) {
++	    if (d->currentView) {
++		d->currentView->setViewportUpdateMode(d->savedViewportUpdateMode);
++	    }
++
++	    d->currentView = view;
++	    if (view) {
++		d->savedViewportUpdateMode = view->viewportUpdateMode();
++		view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
++	    }
++	    d->updateEventFilters();
++	}
++
++	d->setWidget(widget);
++
++	QTransform transform = painter->combinedTransform();
++	QRect overlayrect = transform.mapRect(widget->rect());
++	QPoint offset = widget->mapToGlobal(QPoint(overlayrect.x(), overlayrect.y()));
++
++	xres = d->boundingRect.toRect().width();
++	yres = d->boundingRect.toRect().height();
++	xoff = offset.x();
++	yoff = offset.y();
++
++	if (xoff + xres > screen_info.xres)
++	    xres = screen_info.xres - xoff;
++	if (yoff + yres > screen_info.yres)
++	    yres = screen_info.yres - yoff;
++	if (xoff < 0) {
++	   xres += xoff;
++	   xoff = 0;
++	}
++	if (yoff < 0) {
++	   yres += yoff;
++	   yoff = 0;
++	}
++
++	QRect wr = widget->rect();
++	if ((unsigned int)wr.width() < xres)
++	    xres = wr.width();
++	if ((unsigned int)wr.height() < yres)
++	    yres = wr.height();
++
++	SET_PLANE(xoff, yoff, xres, yres, 1);
++    }
+ }
+ 
+ /*!
+-- 
+1.7.4.1
+

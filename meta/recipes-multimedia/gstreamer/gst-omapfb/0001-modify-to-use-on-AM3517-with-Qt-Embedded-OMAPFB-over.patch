@@ -1,0 +1,308 @@
+From 7b93fb4b5589d6bd8923bbb369e93ef69bc8056f Mon Sep 17 00:00:00 2001
+From: Anatolij Gustschin <agust@denx.de>
+Date: Sun, 3 Jul 2011 00:24:44 +0200
+Subject: [PATCH 1/2] modify to use on AM3517 with Qt Embedded OMAPFB overlay
+ renderer
+
+Signed-off-by: Anatolij Gustschin <agust@denx.de>
+---
+ Makefile   |    5 ++-
+ csp_conv.c |  110 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ omapfb.c   |   67 +++++++++++++++++++-----------------
+ 3 files changed, 149 insertions(+), 33 deletions(-)
+ create mode 100644 csp_conv.c
+
+diff --git a/Makefile b/Makefile
+index fa8ec7d..6dc920f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,8 @@
+ CROSS_COMPILE ?= arm-linux-
+ CC := $(CROSS_COMPILE)gcc
+ 
+-CFLAGS := -O2 -ggdb -Wall -Wextra -Wno-unused-parameter -Wmissing-prototypes -ansi -std=c99
++#CFLAGS := -O2 -ggdb -Wall -Wextra -Wno-unused-parameter -Wmissing-prototypes -ansi -std=c99
++CFLAGS := -O3 -Wall -Wextra -Wno-unused-parameter -Wmissing-prototypes -ansi -std=c99 -march=armv7-a -mfpu=neon -mfloat-abi=softfp -ftree-vectorize -ffast-math -fsingle-precision-constant
+ LDFLAGS := -Wl,--no-undefined -Wl,--as-needed
+ 
+ override CFLAGS += -D_GNU_SOURCE -DGST_DISABLE_DEPRECATED
+@@ -19,7 +20,7 @@ D = $(DESTDIR)
+ 
+ # plugin
+ 
+-libgstomapfb.so: omapfb.o log.o
++libgstomapfb.so: omapfb.o log.o csp_conv.o
+ libgstomapfb.so: override CFLAGS += $(GST_CFLAGS) -fPIC \
+ 	-D VERSION='"$(version)"' -I./include
+ libgstomapfb.so: override LIBS += $(GST_LIBS)
+diff --git a/csp_conv.c b/csp_conv.c
+new file mode 100644
+index 0000000..a02b454
+--- /dev/null
++++ b/csp_conv.c
+@@ -0,0 +1,110 @@
++/*
++ * NEON implementation of YV12/I420 to UYVY conversion
++ * Copyright 2008 Ian Rickards, <ian.rickards@arm.com>
++ */
++typedef unsigned char uint8_t;
++
++void uv12_to_uyvy_neon(int w, int h, int y_pitch, int uv_pitch,
++		uint8_t *y_p, uint8_t *u_p, uint8_t *v_p, uint8_t *dest);
++
++void uv12_to_uyvy_neon(int w, int h, int y_pitch, int uv_pitch,
++		       uint8_t *y_p, uint8_t *u_p, uint8_t *v_p, uint8_t *dest)
++{
++    int x, y;
++    uint8_t *dest_even = dest;
++    uint8_t *dest_odd = dest + w * 2;
++    uint8_t *y_p_even = y_p;
++    uint8_t *y_p_odd = y_p + y_pitch;
++
++    /*ErrorF("in uv12_to_uyvy, w: %d, pitch: %d\n", w, pitch);*/
++    if (w<16)
++    {
++        for (y=0; y<h; y+=2)
++        {
++            for (x=0; x<w; x+=2)
++            {
++                /* Output two 2x1 macroblocks to form a 2x2 block from input */
++                uint8_t u_val = *u_p++;
++                uint8_t v_val = *v_p++;
++
++                /* Even row, first pixel */
++                *dest_even++ = u_val;
++                *dest_even++ = *y_p_even++;
++
++                /* Even row, second pixel */
++                *dest_even++ = v_val;
++                *dest_even++ = *y_p_even++;
++
++                /* Odd row, first pixel */
++                *dest_odd++ = u_val;
++                *dest_odd++ = *y_p_odd++;
++
++                /* Odd row, second pixel */
++                *dest_odd++ = v_val;
++                *dest_odd++ = *y_p_odd++;
++            }
++
++            dest_even += w * 2;
++            dest_odd += w * 2;
++
++            u_p += ((uv_pitch << 1) - w) >> 1;
++            v_p += ((uv_pitch << 1) - w) >> 1;
++
++            y_p_even += (y_pitch - w) + y_pitch;
++            y_p_odd += (y_pitch - w) + y_pitch;
++        }
++    }
++    else
++    {
++        for (y=0; y<h; y+=2)
++        {
++            x=w;
++            do {
++                // avoid using d8-d15 (q4-q7) aapcs callee-save registers
++                __asm__ volatile (
++                        "1:\n\t"
++                        "vld1.u8   {d0}, [%[u_p]]!\n\t"
++                        "sub       %[x],%[x],#16\n\t"
++                        "cmp       %[x],#16\n\t"
++                        "vld1.u8   {d1}, [%[v_p]]!\n\t"
++                        "vld1.u8   {q1}, [%[y_p_even]]!\n\t"
++                        "vzip.u8   d0, d1\n\t"
++                        "vld1.u8   {q2}, [%[y_p_odd]]!\n\t"
++                // use 2-element struct stores to zip up y with y&v
++                        "vst2.u8   {q0,q1}, [%[dest_even]]!\n\t"
++                        "vmov.u8   q1, q2\n\t"
++                        "vst2.u8   {q0,q1}, [%[dest_odd]]!\n\t"
++                        "bhs       1b\n\t"
++                        : [u_p] "+r" (u_p), [v_p] "+r" (v_p), [y_p_even] "+r" (y_p_even), [y_p_odd] "+r" (y_p_odd),
++                          [dest_even] "+r" (dest_even), [dest_odd] "+r" (dest_odd),
++                          [x] "+r" (x)
++                        :
++                        : "cc", "memory", "d0","d1","d2","d3","d4","d5"
++                        );
++                if (x!=0)
++                {
++                    // overlap final 16-pixel block to process requested width exactly
++                    x = 16-x;
++                    u_p -= x/2;
++                    v_p -= x/2;
++                    y_p_even -= x;
++                    y_p_odd -= x;
++                    dest_even -= x*2;
++                    dest_odd -= x*2;
++                    x = 16;
++                    // do another 16-pixel block
++                }
++            }
++            while (x!=0);
++
++            dest_even += w * 2;
++            dest_odd += w * 2;
++
++            u_p += ((uv_pitch << 1) - w) >> 1;
++            v_p += ((uv_pitch << 1) - w) >> 1;
++
++            y_p_even += (y_pitch - w) + y_pitch;
++            y_p_odd += (y_pitch - w) + y_pitch;
++        }
++    }
++}
+diff --git a/omapfb.c b/omapfb.c
+index 3fe8d56..8bdbf51 100644
+--- a/omapfb.c
++++ b/omapfb.c
+@@ -50,6 +50,7 @@ struct gst_omapfb_sink {
+ 	unsigned char *framebuffer;
+ 	bool enabled;
+ 	bool manual_update;
++	int cur_idx;
+ 
+ 	struct page *pages;
+ 	int nr_pages;
+@@ -94,7 +95,8 @@ generate_sink_template(void)
+ 		gst_value_set_fourcc(&val, GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'));
+ 		gst_value_list_append_value(&list, &val);
+ #else
+-		gst_value_set_fourcc(&val, GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'));
++		/*gst_value_set_fourcc(&val, GST_MAKE_FOURCC('U', 'Y', 'V', 'Y')); */
++		gst_value_set_fourcc(&val, GST_MAKE_FOURCC ('Y', 'V', '1', '2'));
+ 		gst_value_list_append_value(&list, &val);
+ #endif
+ 
+@@ -109,6 +111,7 @@ generate_sink_template(void)
+ 	return caps;
+ }
+ 
++#if 0
+ static void
+ update(struct gst_omapfb_sink *self)
+ {
+@@ -153,6 +156,7 @@ static struct page *get_page(struct gst_omapfb_sink *self)
+ 		page->used = true;
+ 	return page;
+ }
++#endif
+ 
+ static gboolean
+ setup(struct gst_omapfb_sink *self, GstCaps *caps)
+@@ -193,6 +197,7 @@ setup(struct gst_omapfb_sink *self, GstCaps *caps)
+ 		pr_err(self, "memory map failed");
+ 		return false;
+ 	}
++	memset(self->framebuffer, 0, self->mem_info.size);
+ 
+ 	self->overlay_info.xres = width;
+ 	self->overlay_info.yres = height;
+@@ -226,7 +231,7 @@ setup(struct gst_omapfb_sink *self, GstCaps *caps)
+ 	out_width = ROUND_UP(out_width, 2);
+ 	out_height = ROUND_UP(out_height, 2);
+ 
+-	self->plane_info.enabled = 1;
++	self->plane_info.enabled = 0;
+ 	self->plane_info.pos_x = (self->varinfo.xres - out_width) / 2;
+ 	self->plane_info.pos_y = (self->varinfo.yres - out_height) / 2;
+ 	self->plane_info.out_width = out_width;
+@@ -264,10 +269,14 @@ setup(struct gst_omapfb_sink *self, GstCaps *caps)
+ static GstFlowReturn
+ buffer_alloc(GstBaseSink *base, guint64 offset, guint size, GstCaps *caps, GstBuffer **buf)
+ {
++/*
++ * we will work with pre-allocated gstreamer buffers to
++ * achieve better performance. So just set *buf to NULL here.
++ */
++#if 0
+ 	struct gst_omapfb_sink *self = (struct gst_omapfb_sink *)base;
+ 	GstBuffer *buffer;
+ 	struct page *page;
+-
+ 	if (!self->enabled && !setup(self, caps))
+ 		goto missing;
+ 
+@@ -287,6 +296,7 @@ buffer_alloc(GstBaseSink *base, guint64 offset, guint size, GstCaps *caps, GstBu
+ 
+ 	return GST_FLOW_OK;
+ missing:
++#endif
+ 	*buf = NULL;
+ 	return GST_FLOW_OK;
+ }
+@@ -306,8 +316,9 @@ start(GstBaseSink *base)
+ 	struct gst_omapfb_sink *self = (struct gst_omapfb_sink *)base;
+ 	int fd;
+ 
+-	self->nr_pages = 4;
++	self->nr_pages = 2;
+ 	self->cur_page = self->old_page = NULL;
++	self->cur_idx = 0;
+ 
+ 	fd = open("/dev/fb0", O_RDWR);
+ 
+@@ -371,40 +382,34 @@ stop(GstBaseSink *base)
+ 		return false;
+ 	}
+ 
++	self->enabled = false;
+ 	return true;
+ }
+ 
++typedef unsigned char uint8_t;
++extern void uv12_to_uyvy_neon(int w, int h, int y_pitch, int uv_pitch,
++			uint8_t *y_p, uint8_t *u_p, uint8_t *v_p, uint8_t *dest);
++
+ static GstFlowReturn
+ render(GstBaseSink *base, GstBuffer *buffer)
+ {
+ 	struct gst_omapfb_sink *self = (struct gst_omapfb_sink *)base;
+-	struct page *page = NULL;
+-	int i;
+-
+-	for (i = 0; i < self->nr_pages; i++)
+-		if (self->pages[i].buf == GST_BUFFER_DATA(buffer)) {
+-			page = &self->pages[i];
+-			break;
+-		}
+-
+-	if (!page) {
+-		page = get_page(self);
+-		if (!page)
+-			page = self->cur_page; /* not ok, but last resort */
+-		memcpy(page->buf, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+-	}
+-
+-	if (page != self->cur_page) {
+-		self->overlay_info.yoffset = page->yoffset;
+-		ioctl(self->overlay_fd, FBIOPAN_DISPLAY, &self->overlay_info);
+-	}
+-
+-	if (self->manual_update)
+-		update(self);
+-
+-	self->old_page = self->cur_page;
+-	self->cur_page = page;
+-	page->used = false;
++	int w, h, y_pitch, uv_pitch;
++	uint8_t *yb, *ub, *vb;
++	uint8_t *db = self->pages[self->cur_idx].buf;
++
++	w = self->overlay_info.xres;
++	h = self->overlay_info.yres;
++	y_pitch = (w + 3) & ~3;
++	uv_pitch = (((y_pitch >> 1) + 3) & ~3);
++	yb = GST_BUFFER_DATA(buffer);
++	vb = yb + (y_pitch * h);
++	ub = vb + (uv_pitch * (h / 2));
++	uv12_to_uyvy_neon(w & ~15, h & ~15, y_pitch, uv_pitch,
++			  yb, ub, vb,  db);
++	self->overlay_info.yoffset = self->pages[self->cur_idx].yoffset;
++	ioctl(self->overlay_fd, FBIOPAN_DISPLAY, &self->overlay_info);
++	self->cur_idx = self->cur_idx ? 0 : 1;
+ 
+ 	return GST_FLOW_OK;
+ }
+-- 
+1.7.6.4
+

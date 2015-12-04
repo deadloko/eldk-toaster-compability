@@ -1,0 +1,67 @@
+From 1f01113fd567469308bc44ce166b5835bd209add Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Thu, 4 Apr 2013 17:38:54 +0200
+Subject: [PATCH 18/20] ARM: mx5: Fix audio on M53EVK
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ arch/arm/boot/dts/imx53-m53evk.dts |  9 +++++----
+ arch/arm/mach-imx/mach-imx53.c     | 10 +++++++++-
+ 2 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm/boot/dts/imx53-m53evk.dts b/arch/arm/boot/dts/imx53-m53evk.dts
+index e3aa4af..871c426 100644
+--- a/arch/arm/boot/dts/imx53-m53evk.dts
++++ b/arch/arm/boot/dts/imx53-m53evk.dts
+@@ -81,11 +81,13 @@
+ 			     "fsl,imx-audio-sgtl5000";
+ 		model = "imx53-m53evk-sgtl5000";
+ 		ssi-controller = <&ssi2>;
+-		audio-codec = <&codec>;
++		audio-codec = <&sgtl5000>;
+ 		audio-routing =
+ 			"MIC_IN", "Mic Jack",
+ 			"Mic Jack", "Mic Bias",
+-			"Headphone Jack", "HP_OUT";
++			"LINE_IN", "Line In Jack",
++			"Headphone Jack", "HP_OUT",
++			"Ext Spk", "LINE_OUT";
+ 		mux-int-port = <2>;
+ 		mux-ext-port = <4>;
+ 	};
+@@ -175,10 +177,9 @@
+ 	pinctrl-0 = <&pinctrl_i2c1_2>;
+ 	status = "okay";
+ 
+-	codec: sgtl5000@0a {
++	sgtl5000: codec@0a {
+ 		compatible = "fsl,sgtl5000";
+ 		reg = <0x0a>;
+-		clock-frequency = <16000000>;
+ 		VDDA-supply = <&reg_3p2v>;
+ 		VDDIO-supply = <&reg_3p2v>;
+ 	};
+diff --git a/arch/arm/mach-imx/mach-imx53.c b/arch/arm/mach-imx/mach-imx53.c
+index 935905f..5089f96 100644
+--- a/arch/arm/mach-imx/mach-imx53.c
++++ b/arch/arm/mach-imx/mach-imx53.c
+@@ -43,7 +43,15 @@ static void __init imx53_qsb_init(void)
+ 
+ static void __init imx53_m53evk_init(void)
+ {
+-	imx53_ssi_clk_init();
++	struct clk *clk;
++
++	clk = clk_get_sys(NULL, "ssi_ext1");
++	if (IS_ERR(clk)) {
++		pr_err("failed to get clk ssi_ext1\n");
++		return;
++	}
++
++	clk_register_clkdev(clk, NULL, "2-000a");
+ }
+ 
+ static void __init imx53_dt_init(void)
+-- 
+1.8.4.3
+

@@ -1,0 +1,55 @@
+From 8adff3faeb18c86afd4975563a2a2bc8c77d1a9c Mon Sep 17 00:00:00 2001
+From: Anatolij Gustschin <agust@denx.de>
+Date: Mon, 28 Nov 2011 09:33:37 +0100
+Subject: [PATCH 2/2] gst-omapfb: modify to use with Qt-Mobility extensions
+
+Signed-off-by: Anatolij Gustschin <agust@denx.de>
+---
+ omapfb.c |   17 ++++++++++++-----
+ 1 files changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/omapfb.c b/omapfb.c
+index 8bdbf51..7f905b4 100644
+--- a/omapfb.c
++++ b/omapfb.c
+@@ -14,6 +14,7 @@
+ #include <unistd.h>
+ #include <string.h>
+ #include <stdbool.h>
++#include <stdlib.h>
+ 
+ #include <gst/gst.h>
+ #include <gst/base/gstbasesink.h>
+@@ -168,6 +169,7 @@ setup(struct gst_omapfb_sink *self, GstCaps *caps)
+ 	size_t framesize;
+ 	int par_n, par_d;
+ 	unsigned out_width, out_height;
++	char *env;
+ 
+ 	structure = gst_caps_get_structure(caps, 0);
+ 
+@@ -231,11 +233,16 @@ setup(struct gst_omapfb_sink *self, GstCaps *caps)
+ 	out_width = ROUND_UP(out_width, 2);
+ 	out_height = ROUND_UP(out_height, 2);
+ 
+-	self->plane_info.enabled = 0;
+-	self->plane_info.pos_x = (self->varinfo.xres - out_width) / 2;
+-	self->plane_info.pos_y = (self->varinfo.yres - out_height) / 2;
+-	self->plane_info.out_width = out_width;
+-	self->plane_info.out_height = out_height;
++	env = getenv("QT_MOBILITY_VIDEO_BACKEND");
++	if (env && !strncasecmp(env, "omapfb", 6)) {
++		self->plane_info.enabled = 1;
++	} else {
++		self->plane_info.enabled = 0;
++		self->plane_info.pos_x = (self->varinfo.xres - out_width) / 2;
++		self->plane_info.pos_y = (self->varinfo.yres - out_height) / 2;
++		self->plane_info.out_width = out_width;
++		self->plane_info.out_height = out_height;
++	}
+ 
+ 	pr_info(self, "output info: %dx%d, offset: %d,%d",
+ 			out_width, out_height,
+-- 
+1.7.6.4
+

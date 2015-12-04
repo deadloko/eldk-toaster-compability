@@ -1,0 +1,218 @@
+From 325d699b00edde6cef06a7dee99c8440265a61ec Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@denx.de>
+Date: Mon, 18 Feb 2013 20:25:28 +0100
+Subject: [PATCH 13/20] input: stmpe: Fix the touchscreen interrupt handling
+
+The touchscreen interrupt handling in the STMPE touchscreen driver
+is completely broken. There is no hardware flaw in the STMPE chip.
+This patch fixes the breakage.
+
+Signed-off-by: Marek Vasut <marex@denx.de>
+---
+ drivers/input/touchscreen/stmpe-ts.c | 111 +++++++++++++++--------------------
+ drivers/mfd/stmpe.c                  |  12 ++--
+ 2 files changed, 51 insertions(+), 72 deletions(-)
+
+diff --git a/drivers/input/touchscreen/stmpe-ts.c b/drivers/input/touchscreen/stmpe-ts.c
+index 59e81b0..aacad53 100644
+--- a/drivers/input/touchscreen/stmpe-ts.c
++++ b/drivers/input/touchscreen/stmpe-ts.c
+@@ -67,7 +67,7 @@
+ struct stmpe_touch {
+ 	struct stmpe *stmpe;
+ 	struct input_dev *idev;
+-	struct delayed_work work;
++	struct work_struct work;
+ 	struct device *dev;
+ 	u8 sample_time;
+ 	u8 mod_12b;
+@@ -95,77 +95,60 @@ static int __stmpe_reset_fifo(struct stmpe *stmpe)
+ 
+ static void stmpe_work(struct work_struct *work)
+ {
+-	int int_sta;
+-	u32 timeout = 40;
+-
++	u8 data_set[4];
++	int x, y, z, touch = 1;
+ 	struct stmpe_touch *ts =
+-	    container_of(work, struct stmpe_touch, work.work);
+-
+-	int_sta = stmpe_reg_read(ts->stmpe, STMPE_REG_INT_STA);
+-
+-	/*
+-	 * touch_det sometimes get desasserted or just get stuck. This appears
+-	 * to be a silicon bug, We still have to clearify this with the
+-	 * manufacture. As a workaround We release the key anyway if the
+-	 * touch_det keeps coming in after 4ms, while the FIFO contains no value
+-	 * during the whole time.
+-	 */
+-	while ((int_sta & (1 << STMPE_IRQ_TOUCH_DET)) && (timeout > 0)) {
+-		timeout--;
+-		int_sta = stmpe_reg_read(ts->stmpe, STMPE_REG_INT_STA);
+-		udelay(100);
+-	}
++	    container_of(work, struct stmpe_touch, work);
+ 
+-	/* reset the FIFO before we report release event */
+-	__stmpe_reset_fifo(ts->stmpe);
++	while (touch) {
++		stmpe_set_bits(ts->stmpe, STMPE_REG_TSC_CTRL,
++					STMPE_TSC_CTRL_TSC_EN, 0);
+ 
+-	input_report_abs(ts->idev, ABS_PRESSURE, 0);
+-	input_report_key(ts->idev, BTN_TOUCH, 0);
+-	input_sync(ts->idev);
+-}
++		stmpe_block_read(ts->stmpe, STMPE_REG_TSC_DATA_XYZ, 4, data_set);
+ 
+-static irqreturn_t stmpe_ts_handler(int irq, void *data)
+-{
+-	u8 data_set[4];
+-	int x, y, z;
+-	struct stmpe_touch *ts = data;
++		x = (data_set[0] << 4) | (data_set[1] >> 4);
++		y = ((data_set[1] & 0xf) << 8) | data_set[2];
++		z = data_set[3];
+ 
+-	/*
+-	 * Cancel scheduled polling for release if we have new value
+-	 * available. Wait if the polling is already running.
+-	 */
+-	cancel_delayed_work_sync(&ts->work);
+-
+-	/*
+-	 * The FIFO sometimes just crashes and stops generating interrupts. This
+-	 * appears to be a silicon bug. We still have to clearify this with
+-	 * the manufacture. As a workaround we disable the TSC while we are
+-	 * collecting data and flush the FIFO after reading
+-	 */
+-	stmpe_set_bits(ts->stmpe, STMPE_REG_TSC_CTRL,
+-				STMPE_TSC_CTRL_TSC_EN, 0);
++		touch = x && y;
+ 
+-	stmpe_block_read(ts->stmpe, STMPE_REG_TSC_DATA_XYZ, 4, data_set);
++		if (touch) {
++			input_report_abs(ts->idev, ABS_X, x);
++			input_report_abs(ts->idev, ABS_Y, y);
++			/*
++			 * The z-axis (pressure) can be zero if you press too
++			 * hard (do not try this at home, kids!), thus adjust
++			 * it to fit the bill here.
++			 */
++			if (!z)
++				z = 1;
++		} else {
++			z = 0;
++		}
+ 
+-	x = (data_set[0] << 4) | (data_set[1] >> 4);
+-	y = ((data_set[1] & 0xf) << 8) | data_set[2];
+-	z = data_set[3];
++		input_report_abs(ts->idev, ABS_PRESSURE, z);
++		input_report_key(ts->idev, BTN_TOUCH, touch);
++		input_sync(ts->idev);
+ 
+-	input_report_abs(ts->idev, ABS_X, x);
+-	input_report_abs(ts->idev, ABS_Y, y);
+-	input_report_abs(ts->idev, ABS_PRESSURE, z);
+-	input_report_key(ts->idev, BTN_TOUCH, 1);
+-	input_sync(ts->idev);
++		/* flush the FIFO after we have read out our values. */
++		__stmpe_reset_fifo(ts->stmpe);
+ 
+-       /* flush the FIFO after we have read out our values. */
+-	__stmpe_reset_fifo(ts->stmpe);
++		/* reenable the tsc */
++		stmpe_set_bits(ts->stmpe, STMPE_REG_TSC_CTRL,
++				STMPE_TSC_CTRL_TSC_EN, STMPE_TSC_CTRL_TSC_EN);
+ 
+-	/* reenable the tsc */
+-	stmpe_set_bits(ts->stmpe, STMPE_REG_TSC_CTRL,
+-			STMPE_TSC_CTRL_TSC_EN, STMPE_TSC_CTRL_TSC_EN);
++		if (!touch)
++			break;
++
++		msleep(10);
++	}
++}
++
++static irqreturn_t stmpe_ts_handler(int irq, void *data)
++{
++	struct stmpe_touch *ts = data;
+ 
+-	/* start polling for touch_det to detect release */
+-	schedule_delayed_work(&ts->work, HZ / 50);
++	schedule_work(&ts->work);
+ 
+ 	return IRQ_HANDLED;
+ }
+@@ -259,7 +242,7 @@ static void stmpe_ts_close(struct input_dev *dev)
+ {
+ 	struct stmpe_touch *ts = input_get_drvdata(dev);
+ 
+-	cancel_delayed_work_sync(&ts->work);
++	cancel_work_sync(&ts->work);
+ 
+ 	stmpe_set_bits(ts->stmpe, STMPE_REG_TSC_CTRL,
+ 			STMPE_TSC_CTRL_TSC_EN, 0);
+@@ -317,7 +300,7 @@ static int stmpe_input_probe(struct platform_device *pdev)
+ 	int error;
+ 	int ts_irq;
+ 
+-	ts_irq = platform_get_irq_byname(pdev, "FIFO_TH");
++	ts_irq = platform_get_irq_byname(pdev, "TOUCH_DET");
+ 	if (ts_irq < 0)
+ 		return ts_irq;
+ 
+@@ -335,7 +318,7 @@ static int stmpe_input_probe(struct platform_device *pdev)
+ 
+ 	stmpe_ts_get_platform_info(pdev, ts);
+ 
+-	INIT_DELAYED_WORK(&ts->work, stmpe_work);
++	INIT_WORK(&ts->work, stmpe_work);
+ 
+ 	error = devm_request_threaded_irq(&pdev->dev, ts_irq,
+ 					  NULL, stmpe_ts_handler,
+diff --git a/drivers/mfd/stmpe.c b/drivers/mfd/stmpe.c
+index abc76db..7cd56b3 100644
+--- a/drivers/mfd/stmpe.c
++++ b/drivers/mfd/stmpe.c
+@@ -867,13 +867,11 @@ static irqreturn_t stmpe_irq(int irq, void *data)
+ 	for (i = 0; i < num; i++) {
+ 		int bank = num - i - 1;
+ 		u8 status = isr[i];
+-		u8 clear;
++		u8 clear = status;
+ 
+-		status &= stmpe->ier[bank];
+-		if (!status)
+-			continue;
++		stmpe_reg_write(stmpe, israddr + i, clear);
+ 
+-		clear = status;
++		status &= stmpe->ier[bank];
+ 		while (status) {
+ 			int bit = __ffs(status);
+ 			int line = bank * 8 + bit;
+@@ -882,8 +880,6 @@ static irqreturn_t stmpe_irq(int irq, void *data)
+ 			handle_nested_irq(nestedirq);
+ 			status &= ~(1 << bit);
+ 		}
+-
+-		stmpe_reg_write(stmpe, israddr + i, clear);
+ 	}
+ 
+ 	return IRQ_HANDLED;
+@@ -1114,7 +1110,7 @@ void stmpe_of_probe(struct stmpe_platform_data *pdata, struct device_node *np)
+ 	if (pdata->id < 0)
+ 		pdata->id = -1;
+ 
+-	pdata->irq_trigger = IRQF_TRIGGER_NONE;
++	pdata->irq_trigger = IRQF_TRIGGER_LOW;
+ 
+ 	pdata->irq_over_gpio = of_get_property(np, "irq-over-gpio", NULL);
+ 	pdata->irq_gpio = of_get_named_gpio(np, "irq-gpios", 0);
+-- 
+1.8.4.3
+
